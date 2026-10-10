@@ -169,6 +169,31 @@ def test_zweb_webs(assert_web_files):
     assert_web_files(d, stabs, regions)
 
 
+def test_double_disjoint_zweb_webs(assert_web_files):
+    d = from_pyzx(generate.zweb(2, 2))
+    d.compose(from_pyzx(generate.zweb(2, 2)))
+    stabs, regions = compute_pauli_webs(d)
+
+    assert len(stabs) == 8
+    assert len(regions) == 2
+
+    assert_web_files(d, stabs, regions)
+
+
+def test_double_disjoint_zweb_partitioned_webs(assert_web_files):
+    """Regression test for computing partitioned webs"""
+    d = from_pyzx(generate.zweb(2, 2))
+    first_nodes = list(set(d.node_indices()).difference(d.boundary_nodes()))
+    d.compose(from_pyzx(generate.zweb(2, 2)))
+    second_nodes = list(set(d.node_indices()).difference(d.boundary_nodes()).difference(first_nodes))
+    stabs, regions = pauli_webs_through_partitions(d, partitions=[first_nodes, second_nodes])
+
+    assert len(stabs) == 8
+    assert len(regions) == 2
+
+    assert_web_files(d, stabs, regions)
+
+
 ROTATED_SURFACE_CODE_SHOR_PARAMETERS = [(3, 1), (5, 1), (5, 3)]
 
 
