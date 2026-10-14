@@ -2,4 +2,4 @@
 extend = "../ruff.toml"
 
 [lint]
-extend-per-file-ignores = { "streamlit_app.py" = ["INP001"], "tests/**" = ["INP001", "S101"] }
+extend-per-file-ignores = { "streamlit_app.py" = ["INP001"], "conftest.py" = ["INP001"], "tests/**" = ["INP001", "S101"] }
