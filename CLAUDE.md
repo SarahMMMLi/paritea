@@ -18,10 +18,11 @@ that change belongs on its own branch off `origin/main` and goes upstream as a p
 
 ## Git remotes
 
-- `origin` = upstream `paritea/paritea` (read-only for us). `main` tracks `origin/main`, so `git pull` fetches upstream.
-- `fork` = `SarahMMMLi/paritea`. `remote.pushDefault` is `fork`, so a plain `git push` goes to the fork.
+- `fork` = `SarahMMMLi/paritea`. `main` tracks `fork/main`, so `git pull`, `git push` and VS Code's Sync button all
+  work against the fork. `remote.pushDefault` is also `fork`, so a plain `git push` from any branch goes there.
+- `origin` = upstream `paritea/paritea` (no push access). Nothing pulls from it automatically.
 
-Sync with upstream: `git pull origin main` then `git push`.
+Bring in upstream changes deliberately: `git pull origin main`, then `git push` (or VS Code: Pull from… → `origin`).
 
 Contributing a library fix upstream: branch from `origin/main`, change only library files, push the branch to `fork`,
 open a PR against `paritea/paritea` with a Conventional Commits title (`feat:`, `fix:`, `docs:`, `refactor:`, …),
