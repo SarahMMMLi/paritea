@@ -1,0 +1,10 @@
+[server]
+# Re-run the app automatically when a source file changes (handy while iterating).
+runOnSave = true
+
+[browser]
+gatherUsageStats = false
+
+[client]
+# Navigation is defined explicitly in streamlit_app.py via st.navigation.
+showSidebarNavigation = true

@@ -1,0 +1,43 @@
+# CLAUDE.md
+
+This repository is a personal fork of [paritea/paritea](https://github.com/paritea/paritea) that adds a web user
+interface (`app/`) on top of the upstream library.
+
+## Layout
+
+| Path | Owner | What it is |
+|---|---|---|
+| `src/paritea/`, `rust/`, `tests/`, `benchmarks/`, `demo/` | upstream | The paritea library (Python + Rust bindings built with maturin) |
+| `pyproject.toml`, `uv.lock`, `Cargo.*`, `ruff.toml`, `.github/workflows/` (except `app.yml`) | upstream | Library build, lint and CI config |
+| `app/` | this fork | Streamlit UI — a separate uv project that depends on the library in editable mode. See `app/CLAUDE.md` |
+| `.github/workflows/app.yml` | this fork | CI for the UI |
+
+**Rule: UI work happens only inside `app/`.** Do not edit upstream-owned files to make the UI work. Keeping them
+untouched means `git pull origin main` never conflicts. If the UI genuinely needs a library change, stop and say so:
+that change belongs on its own branch off `origin/main` and goes upstream as a pull request (see below).
+
+## Git remotes
+
+- `origin` = upstream `paritea/paritea` (read-only for us). `main` tracks `origin/main`, so `git pull` fetches upstream.
+- `fork` = `SarahMMMLi/paritea`. `remote.pushDefault` is `fork`, so a plain `git push` goes to the fork.
+
+Sync with upstream: `git pull origin main` then `git push`.
+
+Contributing a library fix upstream: branch from `origin/main`, change only library files, push the branch to `fork`,
+open a PR against `paritea/paritea` with a Conventional Commits title (`feat:`, `fix:`, `docs:`, `refactor:`, …),
+which upstream CI enforces.
+
+## Build and test
+
+Requires `uv` and Rust >= 1.91 (`rustup`). uv builds the Rust extension via maturin automatically and rebuilds it
+when `rust/**` changes.
+
+```shell
+uv sync --all-groups      # library dev environment in ./.venv
+uv run pytest             # library tests (~1.5 min)
+ruff check && ruff format # lint/format, configured by ruff.toml (applies to app/ too)
+```
+
+UI commands live in `app/CLAUDE.md`.
+
+Upstream strips Jupyter notebook outputs (`nbstripout` in pre-commit and CI); commit notebooks without outputs.

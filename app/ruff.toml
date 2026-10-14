@@ -1,0 +1,5 @@
+# Inherit the library's lint rules so the UI follows the same style as upstream.
+extend = "../ruff.toml"
+
+[lint]
+extend-per-file-ignores = { "streamlit_app.py" = ["INP001"], "tests/**" = ["INP001", "S101"] }

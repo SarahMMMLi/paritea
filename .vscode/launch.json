@@ -1,0 +1,15 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "paritea UI (Streamlit)",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "streamlit",
+      "args": ["run", "streamlit_app.py"],
+      "cwd": "${workspaceFolder}/app",
+      "python": "${workspaceFolder}/app/.venv/bin/python",
+      "justMyCode": true
+    }
+  ]
+}
