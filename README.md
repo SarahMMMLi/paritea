@@ -47,7 +47,7 @@ Furthermore, this project requires a recent version of Rust to install. Obtain R
 Developers should then, after cloning this repository, install all required dependencies via:
 
 ```shell
-uv sync --group all
+uv sync --all-groups
 ```
 
 This will by default install developer dependencies as well, such as test and code style dependencies. Afterward, run
