@@ -6,7 +6,7 @@ import { shelf } from "./shelf.js";
 import { renderDem } from "./tools/dem.js";
 import { renderDiagrams } from "./tools/diagrams.js";
 import { renderFault } from "./tools/fault.js";
-import { renderHome } from "./tools/home.js";
+import { TOOLS, renderHome } from "./tools/home.js";
 import { renderNoise } from "./tools/noise.js";
 import { renderPropagation } from "./tools/propagation.js";
 import { renderSemantic } from "./tools/semantic.js";
@@ -39,6 +39,48 @@ engine.addEventListener("status", ({ detail }) => {
   }
   document.querySelectorAll("[data-engine-message]").forEach((n) => (n.textContent = engineMessage));
 });
+
+// The header's tools menu: every live tool, grouped as in the catalogue on the home page.
+const menu = document.getElementById("tools-menu");
+const groups = [...new Set(TOOLS.filter((t) => t.live).map((t) => t.group))];
+document.getElementById("tools-menu-panel").innerHTML = `${groups
+  .map(
+    (group) => `<div class="menu-group"><span class="menu-group-name">${group}</span>${TOOLS.filter((t) => t.live && t.group === group)
+      .map((t) => `<a href="#/${t.id}" data-tool="${t.id}">${t.title}</a>`)
+      .join("")}</div>`,
+  )
+  .join("")}<a class="menu-all" href="#/">All tools, with what each needs and gives</a>`;
+document.addEventListener("click", (e) => {
+  if (menu.open && (!menu.contains(e.target) || e.target.closest(".menu-panel a"))) menu.open = false;
+});
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape" && menu.open) {
+    menu.open = false;
+    menu.querySelector("summary").focus();
+  }
+});
+
+// The header's theme switch: flips between light and dark, overriding (and remembering) the system setting.
+const themeButton = document.getElementById("theme-toggle");
+const systemDark = window.matchMedia("(prefers-color-scheme: dark)");
+const isDark = () => (document.documentElement.dataset.theme ?? (systemDark.matches ? "dark" : "light")) === "dark";
+function labelThemeButton() {
+  const label = isDark() ? "Switch to the light theme" : "Switch to the dark theme";
+  themeButton.setAttribute("aria-label", label);
+  themeButton.title = label;
+}
+themeButton.addEventListener("click", () => {
+  const theme = isDark() ? "light" : "dark";
+  document.documentElement.dataset.theme = theme;
+  try {
+    localStorage.setItem("paritea-theme", theme);
+  } catch {
+    // Storage can be unavailable (private windows); the switch still works for this visit.
+  }
+  labelThemeButton();
+});
+systemDark.addEventListener("change", labelThemeButton);
+labelThemeButton();
 
 // A restarted engine has an empty shelf, so the page's copy is emptied too.
 engine.addEventListener("restart", () => shelf.clear());
@@ -78,6 +120,10 @@ function route() {
   const [path, search = ""] = location.hash.replace(/^#\/?/, "").split("?");
   const [render, title] = ROUTES[path] ?? ROUTES[""];
   document.title = title;
+  menu.open = false;
+  menu.querySelectorAll("[data-tool]").forEach((a) =>
+    a.dataset.tool === path ? a.setAttribute("aria-current", "page") : a.removeAttribute("aria-current"),
+  );
   render(ctx, Object.fromEntries(new URLSearchParams(search)));
   window.scrollTo(0, 0);
 }

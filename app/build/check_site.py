@@ -394,6 +394,43 @@ def check_cancel_slow_runs(page) -> list[str]:
     return failures
 
 
+def check_header(page) -> list[str]:
+    """The header's tools menu reaches every tool, and its theme switch flips the theme and remembers it."""
+    failures = []
+    page.goto(URL + "#/")
+    page.click("#tools-menu > summary")
+    tools = page.evaluate("[...document.querySelectorAll('#tools-menu-panel a[data-tool]')].map((a) => a.dataset.tool)")
+    if page.evaluate("typeof axe") == "undefined":
+        page.add_script_tag(url=AXE)
+    violations = page.evaluate("async () => (await axe.run('#tools-menu')).violations.map((v) => v.id)")
+    page.click("#tools-menu-panel a[data-tool='fault']")
+    page.wait_for_selector("#fault-form")
+    closed = not page.evaluate("document.getElementById('tools-menu').open")
+    current = page.evaluate("document.querySelector('#tools-menu-panel [aria-current=page]')?.dataset.tool")
+    ok = len(tools) == 8 and not violations and closed and current == "fault"
+    print(
+        f"{'OK  ' if ok else 'FAIL'} Header: menu lists {len(tools)} tools, axe {violations or 'clean'}, went to "
+        f"{current}, closed {closed}"
+    )
+    if not ok:
+        failures.append("tools menu")
+
+    background = "getComputedStyle(document.body).backgroundColor"
+    before = page.evaluate(background)
+    page.click("#theme-toggle")
+    theme, after = page.evaluate("document.documentElement.dataset.theme"), page.evaluate(background)
+    page.reload()
+    page.wait_for_function(READY, timeout=300_000)
+    kept = page.evaluate("document.documentElement.dataset.theme") == theme and page.evaluate(background) == after
+    page.click("#theme-toggle")
+    back = page.evaluate(background) == before
+    ok = theme in ("light", "dark") and after != before and kept and back
+    print(f"{'OK  ' if ok else 'FAIL'} Header: theme switch {before} -> {after} ({theme}), kept after reload {kept}")
+    if not ok:
+        failures.append("theme switch")
+    return failures
+
+
 AXE = "https://cdnjs.cloudflare.com/ajax/libs/axe-core/4.10.2/axe.min.js"
 # Each page with a result on it, reached through links where possible (D1 and N1 come from the first two steps).
 PAGES_WITH_RESULTS = [
@@ -591,6 +628,7 @@ def main() -> int:
         failures += check_fault(page)
         failures += check_leaving(page)
         failures += check_cancel_slow_runs(page)
+        failures += check_header(page)
         link_failures, link_logs = check_links(browser)
         failures += link_failures
         logs += link_logs

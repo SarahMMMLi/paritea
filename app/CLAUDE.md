@@ -33,7 +33,7 @@ anything it calls, also run the browser check.
 
 | Path | Role |
 |---|---|
-| `web/index.html`, `web/css/app.css` | Page shell and styles (design tokens first, light and dark) |
+| `web/index.html`, `web/css/app.css` | Page shell and styles: design tokens first, light, and dark when the system asks for it unless the header's theme switch chose light (`data-theme`), or when it chose dark; both dark blocks hold the same tokens |
 | `web/js/worker.js` | The engine: loads Pyodide, installs `web/wheels` with `deps=False`, calls `paritea_ui.api.dispatch` |
 | `web/js/engine.js` | Worker client; falls back to `web/data` (preview mode) if the engine cannot start, or with `?engine=precomputed` |
 | `web/js/main.js` | Boot, engine status pill and hash routing (`#/`, `#/diagrams`, `#/webs?generator=z-web-grid&qubits=3`) |
@@ -55,7 +55,7 @@ anything it calls, also run the browser check.
 - **Logic in `paritea_ui`, presentation in `web/js`.** Anything that calls paritea is an operation in `api.py` with a
   test in `tests/test_api.py`; the tool pages gather input, call `ctx.engine.run(op, args)` and show the result.
 - **New tool page** → a module in `web/js/tools/`, a route in `web/js/main.js`, `live: true` in the catalogue
-  (`tools/home.js`), its operations in `paritea_ui/api.py` with tests in `tests/test_api.py`, and a flow in
+  (`tools/home.js`, which also fills the header's Tools menu), its operations in `paritea_ui/api.py` with tests in `tests/test_api.py`, and a flow in
   `build/check_site.py`.
 - **Check before Rust.** Run `validate.require_valid` (or a check of your own that raises `UserError`) before calling
   paritea, so mistakes come back as plain-word messages instead of panics.

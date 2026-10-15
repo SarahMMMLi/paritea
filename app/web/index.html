@@ -7,6 +7,10 @@
   <meta name="description" content="Use paritea, a toolkit for faults in Clifford ZX diagrams, directly in your browser. Nothing to install.">
   <link rel="icon" href="favicon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="css/app.css">
+  <script>
+    // Apply a theme chosen with the header's switch before the first paint (main.js wires up the switch).
+    try { const theme = localStorage.getItem("paritea-theme"); if (theme) document.documentElement.dataset.theme = theme; } catch {}
+  </script>
   <script type="module" src="js/main.js"></script>
 </head>
 <body>
@@ -21,13 +25,19 @@
         <span class="brand-name">paritea</span>
       </a>
       <nav class="topnav" aria-label="Main">
-        <a href="#/">Tools</a>
-        <a href="https://github.com/paritea/paritea" target="_blank" rel="noopener">GitHub <span aria-hidden="true">↗</span></a>
+        <details class="tools-menu" id="tools-menu">
+          <summary>Tools</summary>
+          <div class="menu-panel" id="tools-menu-panel"></div>
+        </details>
+        <a class="github-link" href="https://github.com/paritea/paritea" target="_blank" rel="noopener">GitHub <span aria-hidden="true">↗</span></a>
       </nav>
       <div class="engine" id="engine-status" role="status" aria-live="polite" data-state="loading">
         <span class="engine-dot" aria-hidden="true"></span>
         <span class="engine-label">Starting the engine…</span>
       </div>
+      <button type="button" class="icon-btn theme-toggle" id="theme-toggle" aria-label="Switch to the dark theme">
+        <svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="7" class="theme-ring"/><path d="M10 3a7 7 0 0 1 0 14z" class="theme-half"/></svg>
+      </button>
     </div>
   </header>
 
