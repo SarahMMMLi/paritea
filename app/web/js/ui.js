@@ -193,6 +193,26 @@ export function scrollToResult(element) {
   element?.scrollIntoView({ behavior: reduce ? "auto" : "smooth", block: "nearest" });
 }
 
+/**
+ * Offers Cancel, and shows how long `task` has been running, once it has taken more than a second. Cancel restarts
+ * the engine (the only way to stop paritea's Rust code), so the task's request fails with type "Cancelled".
+ */
+export async function withCancel(ctx, { cancel, elapsed }, task) {
+  const started = performance.now();
+  const timer = setInterval(() => {
+    cancel.hidden = false;
+    if (elapsed) elapsed.textContent = `Running for ${Math.round((performance.now() - started) / 1000)} s`;
+  }, 1000);
+  cancel.onclick = () => ctx.engine.restart("Cancelled.");
+  try {
+    return await task();
+  } finally {
+    clearInterval(timer);
+    cancel.hidden = true;
+    if (elapsed) elapsed.textContent = "";
+  }
+}
+
 /** Puts a button into its busy state while `task` runs. */
 export async function withBusyButton(button, busyLabel, task) {
   const label = button.innerHTML;

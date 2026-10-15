@@ -363,6 +363,37 @@ def check_leaving(page) -> list[str]:
     return [] if ok else ["a result arriving after leaving its page was shown elsewhere, or missed the shelf"]
 
 
+def check_cancel_slow_runs(page) -> list[str]:
+    """The slowest runs of fault propagation (about half a minute for 35,763 faults) and stim's DEM (minutes at
+    distance 9 with 20 rounds) can be cancelled."""
+    failures = []
+    page.evaluate("window.lastEntry = null")
+    page.goto(URL + "#/diagrams?generator=rotated-surface-code-memory-experiment&distance=9&rounds=10")
+    page.wait_for_function("window.lastEntry", timeout=120_000)
+    page.goto(URL + f"#/noise?diagram={page.evaluate('window.lastEntry.id')}")
+    page.wait_for_selector("#noise-form svg.diagram line", state="attached", timeout=120_000)
+    page.evaluate("window.lastNoise = null")
+    page.click("#run")
+    page.wait_for_function("window.lastNoise", timeout=120_000)
+    runs = [
+        ("propagation", f"#/propagation?noise={page.evaluate('window.lastNoise.id')}&run=1", "lastPropagation"),
+        ("stim -> DEM", "#/dem?distance=9&rounds=20&p=0.001", "lastDem"),
+    ]
+    for name, link, result in runs:
+        page.evaluate(f"window.{result} = null")
+        page.goto(URL + link)
+        page.click("#cancel", timeout=60_000)  # Cancel appears once a run has taken a second
+        page.wait_for_function(f"window.{result} && window.{result}.cancelled", timeout=30_000)
+        explained = "Cancelled" in page.inner_text("#results")
+        page.wait_for_function(READY, timeout=120_000)
+        ready = page.inner_text("#engine-status").strip()
+        ok = explained and ready.startswith("Ready")
+        print(f"{'OK  ' if ok else 'FAIL'} Cancel {name}: explained {explained}, then '{ready}'")
+        if not ok:
+            failures.append(f"cancelling {name}")
+    return failures
+
+
 AXE = "https://cdnjs.cloudflare.com/ajax/libs/axe-core/4.10.2/axe.min.js"
 # Each page with a result on it, reached through links where possible (D1 and N1 come from the first two steps).
 PAGES_WITH_RESULTS = [
@@ -559,6 +590,7 @@ def main() -> int:
         failures += check_console(page)
         failures += check_fault(page)
         failures += check_leaving(page)
+        failures += check_cancel_slow_runs(page)
         link_failures, link_logs = check_links(browser)
         failures += link_failures
         logs += link_logs

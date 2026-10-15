@@ -1,7 +1,7 @@
 // Python console: run any paritea code in the page's engine, like a notebook cell.
 
 import { shelf } from "../shelf.js";
-import { escapeHtml, formatSeconds, noticeHtml, pending, withBusyButton } from "../ui.js";
+import { escapeHtml, formatSeconds, noticeHtml, pending, withBusyButton, withCancel } from "../ui.js";
 
 const EXAMPLES = [
   {
@@ -138,13 +138,11 @@ export async function renderConsole(ctx) {
 async function run(ctx) {
   const code = document.getElementById("console-code").value;
   if (!code.trim()) return;
-  const cancel = document.getElementById("console-cancel");
-  cancel.hidden = false;
-  cancel.onclick = () => ctx.engine.restart("Cancelled.");
+  const controls = { cancel: document.getElementById("console-cancel") };
   await withBusyButton(document.getElementById("console-run"), "Running…", async () => {
     ctx.setBusy(true);
     try {
-      const result = await ctx.engine.run("console_run", { code });
+      const result = await withCancel(ctx, controls, () => ctx.engine.run("console_run", { code }));
       result.shelf.forEach((entry) => shelf.add(entry));
       history.unshift({ code, ...result });
     } catch (err) {
@@ -153,7 +151,6 @@ async function run(ctx) {
         : err.message;
       history.unshift({ code, stdout: "", result: null, error: message, seconds: 0 });
     } finally {
-      cancel.hidden = true;
       ctx.setBusy(false);
     }
   });

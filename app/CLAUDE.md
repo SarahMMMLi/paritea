@@ -132,7 +132,9 @@ Worked examples: `../demo/*.ipynb`, `../tests/**`, `../benchmarks/`.
   non-Clifford or negative phases, and `is_fault_equivalence(..., until=0)`.
 - **Long Rust calls cannot be interrupted.** They block the engine's worker (not the page) until they finish; Cancel
   restarts the worker (`engine.restart()`), which empties the shelf. Bound inputs (number limits, the fault weight) and
-  offer Cancel on tools that can be slow.
+  wrap runs that can take more than a few seconds in `ui.withCancel` (fault equivalence, propagation, stim → DEM and
+  the console do). Measured in the browser at the input limits: Pauli webs of a distance-9, 10-round surface code take
+  about 1 s, propagating its 35,763 faults about 30 s, and stim's distance-9, 20-round DEM about 6 minutes.
 - **Keep `quiet=True`** for `is_fault_equivalence`: its progress bar needs a thread, which the browser engine lacks.
 - **`paritea.draw` only works in Jupyter.** The page draws diagrams itself (`web/js/diagram-view.js`).
 - **Mutating functions**: `Diagram.io_sorted()` (called inside both equivalence checks) may set IO, `NoiseModel.compress`

@@ -1,7 +1,18 @@
 // Fault equivalence: do two noisy diagrams behave the same, fault for fault, up to some fault weight?
 
 import { shelf } from "../shelf.js";
-import { codeCardHtml, errorHtml, escapeHtml, formatSeconds, noticeHtml, plural, scrollToResult, wireCopyButtons, withBusyButton } from "../ui.js";
+import {
+  codeCardHtml,
+  errorHtml,
+  escapeHtml,
+  formatSeconds,
+  noticeHtml,
+  plural,
+  scrollToResult,
+  wireCopyButtons,
+  withBusyButton,
+  withCancel,
+} from "../ui.js";
 
 // Pairs from paritea's demo and tests, with paritea's answers.
 const PAIRS = [
@@ -159,21 +170,12 @@ async function check(ctx) {
   const smallest = document.getElementById("smallest").checked;
   Object.assign(remembered, { a: a.value, b: b.value, limit: noLimit ? "none" : String(maxWeight), smallest });
 
-  const cancel = document.getElementById("cancel");
-  const elapsed = document.getElementById("elapsed");
-  const started = performance.now();
-  const timer = setInterval(() => (elapsed.textContent = `Running for ${Math.round((performance.now() - started) / 1000)} s`), 1000);
-  cancel.hidden = false;
-  cancel.onclick = () => ctx.engine.restart("Cancelled.");
+  const controls = { cancel: document.getElementById("cancel"), elapsed: document.getElementById("elapsed") };
   await withBusyButton(document.getElementById("run"), "Checking…", async () => {
     ctx.setBusy(true);
     try {
-      const result = await ctx.engine.run("fault_equivalence", {
-        a: a.value,
-        b: b.value,
-        max_weight: noLimit ? null : maxWeight,
-        smallest,
-      });
+      const args = { a: a.value, b: b.value, max_weight: noLimit ? null : maxWeight, smallest };
+      const result = await withCancel(ctx, controls, () => ctx.engine.run("fault_equivalence", args));
       if (results.isConnected) showResult(result); // unless the visitor went to another page meanwhile
     } catch (err) {
       if (err.type === "Cancelled") window.lastFault = { cancelled: true };
@@ -188,9 +190,6 @@ async function check(ctx) {
         results.innerHTML = errorHtml(err.type === "UserError" ? "Please check this:" : "The check failed.", err);
       }
     } finally {
-      clearInterval(timer);
-      cancel.hidden = true;
-      elapsed.textContent = "";
       ctx.setBusy(false);
     }
   });

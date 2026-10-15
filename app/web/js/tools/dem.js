@@ -16,6 +16,7 @@ import {
   wireCopyButtons,
   wireCopyLink,
   withBusyButton,
+  withCancel,
 } from "../ui.js";
 
 const MAX_DEM_LINES = 400;
@@ -59,7 +60,9 @@ export async function renderDem(ctx, query) {
       </div></div>
       <div class="actions">
         <button class="btn btn-primary" id="run" type="submit">Build detector error model</button>
-        <span class="hint">Usually a second or less</span>
+        <button class="btn btn-ghost" id="cancel" type="button" hidden>Cancel</button>
+        <span class="hint" id="elapsed"></span>
+        <span class="hint">Distance 3: under a second · distance 7, 10 rounds: about 20 s · distance 9, 20 rounds: minutes</span>
       </div>
     </form>
     <section class="results" id="results" aria-live="polite">
@@ -129,15 +132,19 @@ async function build(ctx) {
     remembered.text = text;
     args = { text, filename: remembered.filename };
   }
+  const controls = { cancel: document.getElementById("cancel"), elapsed: document.getElementById("elapsed") };
   await withBusyButton(document.getElementById("run"), "Building…", async () => {
     ctx.setBusy(true);
     try {
-      const result = await ctx.engine.run("stim_dem", args);
+      const result = await withCancel(ctx, controls, () => ctx.engine.run("stim_dem", args));
       shelf.add(result.entry);
       if (results.isConnected) showResult(result); // unless the visitor went to another page meanwhile
     } catch (err) {
+      if (err.type === "Cancelled") window.lastDem = { cancelled: true };
       if (!results.isConnected) return;
-      results.innerHTML = errorHtml(err.type === "UserError" ? "Please check this:" : "Building the DEM failed.", err);
+      results.innerHTML = err.type === "Cancelled"
+        ? noticeHtml("Cancelled. The engine is restarting (a few seconds), so your shelf is empty again.")
+        : errorHtml(err.type === "UserError" ? "Please check this:" : "Building the DEM failed.", err);
     } finally {
       ctx.setBusy(false);
     }
