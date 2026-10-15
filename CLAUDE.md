@@ -9,9 +9,10 @@ interface (`app/`) on top of the upstream library.
 |---|---|---|
 | `src/paritea/`, `rust/`, `tests/`, `benchmarks/`, `demo/` | upstream | The paritea library (Python + Rust bindings built with maturin) |
 | `pyproject.toml`, `uv.lock`, `Cargo.*`, `ruff.toml`, `.github/workflows/` (except `app.yml`, `app-pages.yml`) | upstream | Library build, lint and CI config |
-| `app/` | this fork | The UI: a static web page (`app/web`) that runs paritea in the browser, plus the Streamlit prototype — a separate uv project that depends on the library in editable mode. See `app/CLAUDE.md` |
+| `app/` | this fork | The UI: a static web page (`app/web`) that runs paritea in the browser — a separate uv project that depends on the library in editable mode. See `app/CLAUDE.md` |
 | `.github/workflows/app.yml` | this fork | CI for the UI |
 | `.github/workflows/app-pages.yml` | this fork | Builds the web page and deploys it to GitHub Pages (https://sarahmmmli.github.io/paritea/) |
+| `.vscode/` | this fork | VS Code settings, and the *paritea web page* run configuration that serves the page locally |
 
 **Rule: UI work happens only inside `app/`.** Do not edit upstream-owned files to make the UI work. Keeping them
 untouched means `git pull origin main` never conflicts. If the UI genuinely needs a library change, stop and say so:

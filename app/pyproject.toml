@@ -1,20 +1,17 @@
 [project]
 name = "paritea-ui"
 version = "0.1.0"
-description = "A Streamlit user interface for paritea."
+description = "A web page that runs paritea in the browser."
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
     "paritea",
-    "matplotlib>=3.9",
-    "streamlit>=1.50",
 ]
 
 [dependency-groups]
 dev = [
     "pytest>=8.4.2",
     "ruff==0.14.9", # Same pin as the library
-    "watchdog>=6.0.0",
 ]
 
 [tool.uv]

@@ -1,15 +1,10 @@
-"""Plain-Python helpers around paritea used by the UI.
-
-Nothing in this module imports Streamlit, so everything here can be unit tested and cached.
-"""
+"""The diagram generators the page offers, and how to recognise a panic from paritea's Rust core."""
 
 import random
-from collections import Counter
 from collections.abc import Callable
 from dataclasses import dataclass
 
-from paritea import PauliString
-from paritea.diagram import Diagram, NodeType
+from paritea.diagram import Diagram
 from paritea.generate import (
     clifford,
     rotated_planar_surface_code_stabilisers,
@@ -19,7 +14,6 @@ from paritea.generate import (
     zweb,
 )
 from paritea.glue.pyzx import from_pyzx
-from paritea.web import compute_pauli_webs
 
 from paritea_ui.layout import UNSET, place_unpositioned
 
@@ -135,39 +129,6 @@ def build_diagram(generator: str, **params: int) -> Diagram:
     Not deterministic for every generator: shor_extraction numbers its nodes and edges differently on each call.
     """
     return GENERATORS[generator].build(**params)
-
-
-@dataclass(frozen=True)
-class PauliWebs:
-    """A diagram together with its Pauli webs.
-
-    Webs are keyed by edge indices of exactly this diagram, and rebuilding a diagram can renumber its edges, so keep
-    (and cache) the two together rather than pairing webs with a separately built diagram.
-    """
-
-    diagram: Diagram
-    stabilisers: list[PauliString]
-    regions: list[PauliString]
-
-
-def pauli_webs(d: Diagram) -> PauliWebs:
-    """Stabilising webs and detecting regions of a diagram."""
-    stabilisers, regions = compute_pauli_webs(d)
-    return PauliWebs(d, stabilisers, regions)
-
-
-def diagram_summary(d: Diagram) -> dict[str, int]:
-    """Headline numbers describing a diagram."""
-    inputs, outputs = d.io()
-    types = Counter(d.type(n) for n in d.node_indices())
-    return {
-        "Nodes": d.num_nodes(),
-        "Edges": d.num_edges(),
-        "Inputs": len(inputs),
-        "Outputs": len(outputs),
-        "Z spiders": types[NodeType.Z],
-        "X spiders": types[NodeType.X],
-    }
 
 
 def is_rust_panic(exc: BaseException) -> bool:

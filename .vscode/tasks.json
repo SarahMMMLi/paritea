@@ -1,0 +1,15 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Package the page's Python",
+      "detail": "Repackage app/paritea_ui for the in-browser engine (app/build/build_site.py)",
+      "type": "process",
+      "command": "${workspaceFolder}/app/.venv/bin/python",
+      "args": ["build/build_site.py"],
+      "options": { "cwd": "${workspaceFolder}/app" },
+      "presentation": { "reveal": "silent" },
+      "problemMatcher": []
+    }
+  ]
+}

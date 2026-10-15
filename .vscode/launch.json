@@ -2,14 +2,20 @@
   "version": "0.2.0",
   "configurations": [
     {
-      "name": "paritea UI (Streamlit)",
+      "name": "paritea web page",
       "type": "debugpy",
       "request": "launch",
-      "module": "streamlit",
-      "args": ["run", "streamlit_app.py"],
+      "module": "http.server",
+      "args": ["8000", "--bind", "127.0.0.1", "--directory", "web"],
       "cwd": "${workspaceFolder}/app",
       "python": "${workspaceFolder}/app/.venv/bin/python",
-      "justMyCode": true
+      "env": { "PYTHONUNBUFFERED": "1" },
+      "preLaunchTask": "Package the page's Python",
+      "serverReadyAction": {
+        "pattern": "\\((http://\\S+)\\)",
+        "uriFormat": "%s",
+        "action": "openExternally"
+      }
     }
   ]
 }
