@@ -66,9 +66,11 @@ def main() -> int:
             same_webs = got["stabilisers"] == want["stabilisers"] and got["regions"] == want["regions"]
             ok = counts == expected
             seconds = got["seconds"]["build"] + got["seconds"]["webs"]
-            print(f"{'OK  ' if ok else 'FAIL'} {generator} {params}: {counts[0]} webs / {counts[1]} regions "
-                  f"in {seconds:.3f} s (browser){'' if got.get('precomputed') else ''}; "
-                  f"identical webs to native: {same_webs}")
+            print(
+                f"{'OK  ' if ok else 'FAIL'} {generator} {params}: {counts[0]} webs / {counts[1]} regions "
+                f"in {seconds:.3f} s (browser); "
+                f"identical webs to native: {same_webs}"
+            )
             if not ok:
                 failures.append(f"{generator} {params}: browser {counts} != native {expected}")
             page.screenshot(path=SHOTS / f"3-webs-{i}.png", full_page=True)
@@ -85,7 +87,8 @@ def main() -> int:
         preview.wait_for_function(READY, timeout=60_000)
         preview.wait_for_selector("#generator option", state="attached")
         got = run_case(preview, *CASES[0])
-        print(f"Preview mode: {len(got['stabilisers'])} webs / {len(got['regions'])} regions, precomputed={got.get('precomputed')}")
+        webs, regions = len(got["stabilisers"]), len(got["regions"])
+        print(f"Preview mode: {webs} webs / {regions} regions, precomputed={got.get('precomputed')}")
         preview.screenshot(path=SHOTS / "5-preview.png", full_page=True)
         browser.close()
 
