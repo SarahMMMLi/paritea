@@ -22,10 +22,32 @@ export class Engine extends EventTarget {
       queueMicrotask(() => this.useFallback("Precomputed mode was requested in the page address."));
       return;
     }
+    this.startWorker();
+  }
+
+  startWorker() {
     this.worker = new Worker(new URL("./worker.js", import.meta.url), { type: "module" });
     this.worker.onmessage = ({ data }) => this.onMessage(data);
     this.worker.onerror = (event) => this.useFallback(`The in-browser engine failed to start (${event.message || "unknown error"}).`);
     this.timer = setTimeout(() => this.useFallback("The in-browser engine took too long to start."), START_TIMEOUT_MS);
+  }
+
+  /**
+   * Stops whatever the engine is doing (the only way to interrupt paritea's Rust code) and starts a fresh one.
+   * Everything the engine held, such as the shelf, is lost; pending requests fail with type "Cancelled".
+   */
+  restart(reason = "Cancelled.") {
+    if (this.mode === "precomputed") return;
+    clearTimeout(this.timer);
+    this.worker?.terminate();
+    for (const request of this.pending.values()) request.reject(Object.assign(new Error(reason), { type: "Cancelled" }));
+    this.pending.clear();
+    this.mode = "starting";
+    this.info = null;
+    this.whenSettled = new Promise((resolve) => (this.settle = resolve));
+    this.dispatchEvent(new CustomEvent("restart", { detail: { reason } }));
+    this.emit("python", "Restarting the engine…");
+    this.startWorker();
   }
 
   emit(stage, message) {

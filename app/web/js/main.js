@@ -1,7 +1,9 @@
 // Boot: starts the engine, shows its status in the header, and routes between the tool pages.
 
 import { Engine } from "./engine.js";
+import { shelf } from "./shelf.js";
 import { renderDiagrams } from "./tools/diagrams.js";
+import { renderFault } from "./tools/fault.js";
 import { renderHome } from "./tools/home.js";
 import { renderNoise } from "./tools/noise.js";
 import { renderPropagation } from "./tools/propagation.js";
@@ -36,6 +38,9 @@ engine.addEventListener("status", ({ detail }) => {
   document.querySelectorAll("[data-engine-message]").forEach((n) => (n.textContent = engineMessage));
 });
 
+// A restarted engine has an empty shelf, so the page's copy is emptied too.
+engine.addEventListener("restart", () => shelf.clear());
+
 // What every page gets: where to render, the engine, and a few shared hooks.
 const ctx = {
   app,
@@ -55,6 +60,7 @@ const ctx = {
 const ROUTES = {
   "": [renderHome, "paritea in your browser"],
   diagrams: [renderDiagrams, "Diagrams · paritea"],
+  fault: [renderFault, "Fault equivalence · paritea"],
   noise: [renderNoise, "Noise model · paritea"],
   propagation: [renderPropagation, "Fault propagation · paritea"],
   semantic: [renderSemantic, "Semantic equivalence · paritea"],

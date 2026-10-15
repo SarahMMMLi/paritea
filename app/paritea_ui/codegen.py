@@ -56,7 +56,8 @@ def example_code(example: str) -> str:
         ]
         if needed
     ]
-    return "\n".join(imports).lstrip("\n") + f"\n\n\n{source}\n\ndiagram = {builder.__name__}()\n"
+    args = ", ".join(repr(a) for a in EXAMPLES[example].args)
+    return "\n".join(imports).lstrip("\n") + f"\n\n\n{source}\n\ndiagram = {builder.__name__}({args})\n"
 
 
 def import_code(
@@ -145,10 +146,26 @@ def webs_code(diagram_code: str) -> str:
     )
 
 
-def _as_function(code: str, name: str) -> str:
-    """Wrap diagram-building code in a function returning ``diagram``, so two diagrams can share one script."""
+def _as_function(code: str, name: str, returns: str = "diagram") -> str:
+    """Wrap code in a function returning ``returns``, so two diagrams or noise models can share one script."""
     body = "".join(f"    {line}\n" if line.strip() else "\n" for line in code.rstrip("\n").split("\n"))
-    return f"def {name}():\n{body}    return diagram\n"
+    return f"def {name}():\n{body}    return {returns}\n"
+
+
+def unit_noise_code(diagram_code: str) -> str:
+    """A noise model with an X, a Y and a Z fault of weight 1 on every edge, as paritea uses for bare diagrams."""
+    return _with_import(diagram_code, "from paritea.noise import NoiseModel") + (
+        "noise_model = NoiseModel.weighted_edge_flip_noise(diagram)  # weight 1 on every edge\n"
+    )
+
+
+def fault_code(code_a: str, code_b: str, until: int | None) -> str:
+    return (
+        "from paritea.equivalence import is_fault_equivalence\n\n\n"
+        f"{_as_function(code_a, 'noise_a', 'noise_model')}\n\n{_as_function(code_b, 'noise_b', 'noise_model')}\n\n"
+        f"# until={until}: fault weights below this are checked{' (no limit)' if until is None else ''}\n"
+        f"print(is_fault_equivalence(noise_a(), noise_b(), until={until}, quiet=True))\n"
+    )
 
 
 def semantic_code(code_a: str, code_b: str) -> str:

@@ -369,3 +369,11 @@ svg.diagram.pickable .edge:has(+ .hit:hover) { stroke: var(--accent); stroke-wid
 .tableau .p.Z { color: var(--pauli-z); font-weight: 700; }
 .tableau .io-split { color: var(--text-3); margin: 0 4px; }
 .results > .code-card { margin-top: 16px; }
+
+/* Fault equivalence */
+.limit-row { display: flex; gap: 24px; flex-wrap: wrap; align-items: center; }
+.limit-row .check { margin-top: 0; }
+.limit-row input[type="number"] { width: 72px; min-height: 34px; padding: 4px 8px; }
+.first-difference { margin: 8px 0 0; font-size: 14px; }
+.card-note.plain-pad { border: 0; }
+#cancel[hidden] { display: none; }

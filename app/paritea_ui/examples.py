@@ -129,9 +129,10 @@ class Example:
 
     title: str
     description: str
-    build: Callable[[], Diagram]
+    build: Callable[..., Diagram]
     stabilising_webs: int
     detecting_regions: int
+    args: tuple = ()
 
 
 EXAMPLES: dict[str, Example] = {
@@ -177,6 +178,22 @@ EXAMPLES: dict[str, Example] = {
         one_half_pi_spider,
         stabilising_webs=2,
         detecting_regions=0,
+    ),
+    "star-5": Example(
+        "Star of 5",
+        "One spider with five legs. Collapsing the ring of 5 into it is fault equivalent.",
+        spider_star,
+        stabilising_webs=5,
+        detecting_regions=0,
+        args=(5,),
+    ),
+    "ring-5": Example(
+        "Ring of 5",
+        "Five spiders in a ring, each with one leg: the ring partner of the star of 5.",
+        spider_ring,
+        stabilising_webs=5,
+        detecting_regions=1,
+        args=(5,),
     ),
     "star-6": Example(
         "Star of 6",

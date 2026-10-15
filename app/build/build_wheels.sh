@@ -55,8 +55,22 @@ SRC="$(mktemp -d)/paritea"
 mkdir -p "$SRC"
 cp -R "$REPO_DIR"/{src,rust,Cargo.toml,Cargo.lock,pyproject.toml,README.md,LICENSE.md,NOTICE.md} "$SRC"/
 find "$SRC" \( -name '__pycache__' -o -name '*.so' \) -prune -exec rm -rf {} +
+# Library fixes the browser needs that are not upstream yet (each one also goes upstream as a pull request).
+for fix in "$APP_DIR"/build/patches/*.patch; do
+  if patch -p1 --forward --dry-run -s -d "$SRC" < "$fix" > /dev/null 2>&1; then
+    patch -p1 --forward -s -d "$SRC" < "$fix"
+    echo "Applied $(basename "$fix")"
+  elif patch -p1 --reverse --dry-run -s -d "$SRC" < "$fix" > /dev/null 2>&1; then
+    echo "$(basename "$fix") is already in the library: delete it from app/build/patches/"
+  else
+    echo "$(basename "$fix") no longer applies: update or delete it" >&2
+    exit 1
+  fi
+done
 rm -f "$OUT"/paritea-*.whl
-(cd "$SRC" && MATURIN_PEP517_ARGS="--profile release" "$PYODIDE" build . -o "$OUT")
+# Overflow checks stay on so that, e.g., a bad fault-equivalence bound panics (a catchable error) instead of hanging.
+(cd "$SRC" && CARGO_PROFILE_RELEASE_OVERFLOW_CHECKS=true MATURIN_PEP517_ARGS="--profile release" \
+  "$PYODIDE" build . -o "$OUT")
 
 echo "== Done"
 ls -la "$OUT"

@@ -309,3 +309,78 @@ def test_semantic_python_reproduces_the_answer() -> None:
     exec(result["code"].replace("print(", "answer = ("), namespace)  # noqa: S102
 
     assert namespace["answer"] is result["equivalent"] is False
+
+
+def _noise(example: str, free: str | None = None, weights: tuple[int, int, int] = (1, 1, 1)) -> str:
+    entry = call("diagram_example", example=example)
+    noise_free = _wires_touching(entry, free) if free else []
+    w = dict(zip("xyz", weights, strict=True))
+    return call("noise_model", diagram=entry["id"], weights=w, noise_free=noise_free)["id"]
+
+
+@pytest.mark.parametrize(
+    ("a", "b", "max_weight", "expected"),
+    [
+        # paritea's Steane demo: X 1, Y 2, Z 1 weights, the state's X-spider wires noise-free
+        (lambda: _noise("steane-state", "X", (1, 2, 1)), lambda: _noise("steane-circuit", None, (1, 2, 1)), None, True),
+        (lambda: _noise("steane-state", "X"), lambda: _noise("steane-circuit"), None, False),
+        # bare diagrams get weight-1 faults on every edge, as in paritea's tests
+        (
+            lambda: call("diagram_example", example="two-half-pi")["id"],
+            lambda: call("diagram_example", example="one-pi")["id"],
+            None,
+            True,
+        ),
+        (
+            lambda: call("diagram_example", example="star-5")["id"],
+            lambda: call("diagram_example", example="ring-5")["id"],
+            None,
+            True,
+        ),
+        (
+            lambda: call("diagram_example", example="star-6")["id"],
+            lambda: call("diagram_example", example="ring-6")["id"],
+            None,
+            False,
+        ),
+        (
+            lambda: call("diagram_example", example="star-6")["id"],
+            lambda: call("diagram_example", example="ring-6")["id"],
+            1,
+            True,
+        ),
+    ],
+)
+def test_fault_equivalence_known_answers(a, b, max_weight, expected) -> None:
+    result = call("fault_equivalence", a=a(), b=b(), max_weight=max_weight)
+
+    assert result["equivalent"] is expected
+
+
+def test_fault_equivalence_reports_the_first_difference() -> None:
+    star, ring = call("diagram_example", example="star-6"), call("diagram_example", example="ring-6")
+
+    result = call("fault_equivalence", a=star["id"], b=ring["id"], max_weight=None, smallest=True)
+
+    assert (result["equivalent"], result["first_difference"]) == (False, 2)
+
+
+def test_fault_equivalence_explains_different_semantics_and_closed_diagrams() -> None:
+    two, one = call("diagram_example", example="two-half-pi"), call("diagram_example", example="one-half-pi")
+    closed = call("diagram_example", example="closed-surface-code")
+
+    different = call("fault_equivalence", a=two["id"], b=one["id"])
+
+    assert (different["equivalent"], different["semantic"]) == (False, False)
+    assert "closed diagram" in error("fault_equivalence", a=closed["id"], b=closed["id"])["message"]
+    assert "maximum fault weight" in error("fault_equivalence", a=two["id"], b=two["id"], max_weight=0)["message"]
+
+
+def test_fault_equivalence_python_reproduces_the_answer() -> None:
+    a, b = _noise("steane-state", "X", (1, 2, 1)), _noise("steane-circuit", None, (1, 2, 1))
+    result = call("fault_equivalence", a=a, b=b)
+    namespace: dict = {}
+
+    exec(result["code"].replace("print(", "answer = ("), namespace)  # noqa: S102
+
+    assert namespace["answer"] is result["equivalent"] is True

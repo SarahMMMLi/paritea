@@ -211,6 +211,48 @@ def check_semantic(page) -> list[str]:
     return failures
 
 
+def check_fault(page) -> list[str]:
+    """Pairs from paritea's demo and tests, then a heavy run that is cancelled."""
+    failures = []
+    for index, label, expected, first in [(0, "Steane demo", True, None), (3, "star vs ring of 6", False, 2)]:
+        page.goto(URL + "#/fault")
+        page.evaluate("window.lastFault = null")
+        page.click(f"[data-pair='{index}']")
+        page.wait_for_function("window.lastFault !== null", timeout=180_000)
+        result = page.evaluate("window.lastFault")
+        page.screenshot(path=SHOTS / f"11-fault-{index}.png", full_page=True)
+        got = (result.get("equivalent"), result.get("first_difference"))
+        ok = got == (expected, first)
+        print(f"{'OK  ' if ok else 'FAIL'} Fault: {label} -> {got} (expected {(expected, first)})")
+        if not ok:
+            failures.append(f"fault {label}: {got}")
+
+    # Cancel: a distance-5 surface code compared with itself, with no limit, is far too slow to finish.
+    page.goto(URL + "#/diagrams")
+    page.click("[data-tab='generate']")
+    page.select_option("#generator", "Rotated surface code memory experiment")
+    page.fill("#p-distance", "5")
+    page.fill("#p-rounds", "2")
+    entry = build(page, "#build")
+    page.goto(URL + "#/fault")
+    page.select_option("#fault-a", entry["id"])
+    page.select_option("#fault-b", entry["id"])
+    page.check('input[name="limit"][value="none"]')
+    page.evaluate("window.lastFault = null")
+    page.click("#run")
+    page.wait_for_timeout(1500)
+    page.click("#cancel")
+    page.wait_for_function("window.lastFault !== null", timeout=30_000)
+    cancelled = page.evaluate("window.lastFault.cancelled === true")
+    page.wait_for_function(READY, timeout=120_000)
+    ready = page.inner_text("#engine-status").strip()
+    ok = cancelled and ready.startswith("Ready")
+    print(f"{'OK  ' if ok else 'FAIL'} Fault: cancel restarts the engine -> cancelled={cancelled}, then '{ready}'")
+    if not ok:
+        failures.append("cancel")
+    return failures
+
+
 def main() -> int:
     failures = []
     with sync_playwright() as p:
@@ -250,6 +292,7 @@ def main() -> int:
         failures += check_noise(page)
         failures += check_propagation(page)
         failures += check_semantic(page)
+        failures += check_fault(page)
 
         # Show a detecting region on the first example for a screenshot.
         page.goto(URL + "#/webs")

@@ -183,7 +183,7 @@ def diagram_example(example: str) -> dict[str, Any]:
     if entry is None:
         e = EXAMPLES[example]
         entry = SHELF.add(
-            place_unpositioned(e.build()),
+            place_unpositioned(e.build(*e.args)),
             name=e.title,
             source={"kind": "example", "example": example},
             code=codegen.example_code(example),
@@ -324,8 +324,8 @@ def noise_json(noise: NoiseEntry) -> dict[str, Any]:
     notes = []
     if len(set(weights.values())) > 1:
         notes.append(
-            "The X, Y and Z weights differ. paritea's fault-equivalence check assumes equal weights, so with these it "
-            "may give a wrong answer."
+            "The X, Y and Z weights differ. paritea documents its fault-equivalence check for equal weights, although "
+            "its own Steane demo uses X 1, Y 2, Z 1; read answers with unequal weights with that in mind."
         )
     if not faults:
         notes.append("Every edge is noise-free, so this noise model has no faults.")
@@ -504,6 +504,98 @@ def semantic_equivalence(a: str, b: str) -> dict[str, Any]:
     }
 
 
+# ---------------------------------------------------------------- Fault equivalence
+
+MAX_FAULT_WEIGHT = 12
+
+
+def _noise_side(ref: str) -> tuple[NoiseModel, dict[str, Any], str]:
+    """A noise model from the shelf (N...), or a diagram (D...) with a weight-1 X, Y and Z fault on every edge."""
+    if ref.startswith("N"):
+        noise = SHELF.get_noise(ref)
+        entry = SHELF.get(noise.diagram_id)
+        model, code = noise.model, noise.code
+        weights = noise.settings["weights"]
+        info = {"id": noise.id, "name": noise.name, "diagram": entry.id}
+    else:
+        entry = SHELF.get(ref)
+        model = NoiseModel.weighted_edge_flip_noise(entry.diagram)
+        code = codegen.unit_noise_code(entry.code)
+        weights = {"x": 1, "y": 1, "z": 1}
+        info = {"id": entry.id, "name": f"{entry.name}, weight-1 faults on every edge", "diagram": entry.id}
+    require_valid(entry.diagram)
+    inputs, outputs = entry.diagram.io()
+    if not inputs and not outputs:
+        raise UserError(
+            f"{entry.id} has no inputs or outputs (a closed diagram); fault equivalence compares what faults do to the "
+            "boundary, so it needs boundaries."
+        )
+    info["faults"] = model.num_faults()
+    info["equal_weights"] = len(set(weights.values())) == 1
+    return model, info, code
+
+
+def fault_equivalence(a: str, b: str, max_weight: int | None = None, *, smallest: bool = False) -> dict[str, Any]:
+    """paritea's is_fault_equivalence on two noise models (or diagrams with unit noise), up to a maximum fault weight.
+
+    With ``smallest``, a "no" answer also reports the smallest fault weight at which the two differ.
+    """
+    if max_weight is not None and (not isinstance(max_weight, int) or not 1 <= max_weight <= MAX_FAULT_WEIGHT):
+        raise UserError(f"The maximum fault weight must be a whole number from 1 to {MAX_FAULT_WEIGHT}, or no limit.")
+    model_a, info_a, code_a = _noise_side(a)
+    model_b, info_b, code_b = _noise_side(b)
+    until = None if max_weight is None else max_weight + 1  # paritea checks weights below `until`
+
+    from paritea.equivalence import is_fault_equivalence  # imports stim (or its stand-in): only needed here
+
+    start = time.perf_counter()
+    try:
+        equivalent = is_fault_equivalence(model_a, model_b, until=until, quiet=True)
+        semantic = True
+    except ValueError as exc:
+        if "different semantics" not in str(exc):
+            raise UserError(f"paritea couldn't compare these: {exc}") from exc
+        equivalent, semantic = False, False
+    first_difference = None
+    if smallest and semantic and not equivalent:
+        for weight in range(1, (max_weight or MAX_FAULT_WEIGHT) + 1):
+            if not is_fault_equivalence(model_a, model_b, until=weight + 1, quiet=True):
+                first_difference = weight
+                break
+    seconds = time.perf_counter() - start
+
+    scope = "of any weight" if max_weight is None else f"of weight up to {max_weight}"
+    if not semantic:
+        reason = "They are not even semantically equivalent (different maps), so they cannot be fault equivalent."
+    elif equivalent:
+        reason = (
+            f"Every fault {scope} on either side has a fault on the other side with the same effect and no larger "
+            "weight."
+        )
+    else:
+        reason = (
+            f"Some fault {scope} on one side has no fault on the other side with the same effect and no larger weight."
+        )
+    notes = []
+    if not (info_a["equal_weights"] and info_b["equal_weights"]):
+        notes.append(
+            "The fault weights are not all equal. paritea documents fault equivalence for equal weights, although its "
+            "own Steane demo uses X 1, Y 2, Z 1."
+        )
+    return {
+        "equivalent": equivalent,
+        "semantic": semantic,
+        "max_weight": max_weight,
+        "first_difference": first_difference,
+        "reason": reason,
+        "notes": notes,
+        "a": info_a,
+        "b": info_b,
+        "seconds": seconds,
+        "code": codegen.fault_code(code_a, code_b, until),
+    }
+
+
 # ---------------------------------------------------------------- Pauli webs
 
 
@@ -545,6 +637,7 @@ OPS: dict[str, Callable[..., Any]] = {
     "noise_model": noise_model,
     "noise_get": noise_get,
     "noise_remove": noise_remove,
+    "fault_equivalence": fault_equivalence,
     "propagation": propagation,
     "semantic_equivalence": semantic_equivalence,
     "webs": webs,
