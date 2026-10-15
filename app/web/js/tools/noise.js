@@ -41,7 +41,7 @@ export async function renderNoise(ctx, query) {
           <li><strong>A weight</strong> for X, Y and Z faults: what one fault of that kind costs</li>
           <li><strong>Noise-free edges</strong> (paritea: <code>idealised_edges</code>): a preset, or picks on the drawing</li></ol></section>
       <section class="io-card"><h2>You get</h2>
-        <ul><li>A noise model on your shelf: an X, a Y and a Z fault on every other edge</li>
+        <ul><li>A noise model on your shelf: an X, a Y and a Z fault on every noisy edge</li>
           <li>Every fault with its weight, as a table and a JSON file</li>
           <li>Python code that builds the same noise model</li></ul></section>
     </div>
@@ -75,7 +75,7 @@ export async function renderNoise(ctx, query) {
       </div></div>
       <div class="actions">
         <button class="btn btn-primary" id="run" type="submit">Build noise model</button>
-        <span class="hint">Instant</span>
+        <span class="hint">Usually instant; a few seconds for the largest diagrams</span>
       </div>
     </form>
     <section class="results" id="results" aria-live="polite"></section>
@@ -102,8 +102,7 @@ export async function renderNoise(ctx, query) {
 function renderDiagramPick(ctx, state, live) {
   const box = document.getElementById("diagram-pick");
   const diagrams = shelf.list();
-  const example = `<button type="button" class="btn btn-ghost btn-small" id="use-steane">
-    Use the Steane |0⟩ example (from paritea's demo)</button>`;
+  const example = `<button type="button" class="btn btn-ghost btn-small" id="use-steane">Steane code |0⟩</button>`;
   if (!live) {
     box.innerHTML = `<p class="help">The shelf needs the in-browser engine.</p>`;
     return;
@@ -112,8 +111,9 @@ function renderDiagramPick(ctx, state, live) {
     ? `<select id="noise-diagram">${diagrams
         .map((e) => `<option value="${e.id}">${e.id} · ${escapeHtml(e.name)} (${plural(e.summary.Edges, "edge")})</option>`)
         .join("")}</select>
-       <p class="help">Make more in <a href="#/diagrams">Diagrams</a>, or ${example}</p>`
-    : `<p class="help">Your shelf is empty. <a href="#/diagrams">Build, open or import a diagram</a>, or ${example}</p>`;
+       <p class="help">Make more in <a href="#/diagrams">Diagrams</a>, or start from paritea's demo: ${example}</p>`
+    : `<p class="help">Your shelf is empty. <a href="#/diagrams">Build, open or import a diagram</a>, or start from
+         paritea's demo: ${example}</p>`;
   const select = document.getElementById("noise-diagram");
   if (select) {
     if (remembered.diagram && shelf.entries.has(remembered.diagram)) select.value = remembered.diagram;

@@ -70,7 +70,7 @@ function renderNoisePick(ctx, live) {
   const box = document.getElementById("noise-pick");
   const models = [...shelf.noise.values()];
   const example = `<button type="button" class="btn btn-ghost btn-small" id="use-demo">
-    Use the Steane preparation circuit with unit noise</button>`;
+    Steane preparation circuit, unit noise</button>`;
   if (!live) {
     box.innerHTML = `<p class="help">The shelf needs the in-browser engine.</p>`;
     return;
@@ -79,8 +79,8 @@ function renderNoisePick(ctx, live) {
     ? `<select id="prop-noise">${models
         .map((n) => `<option value="${n.id}">${n.id} · ${escapeHtml(n.name)} (${plural(n.summary.Faults, "fault")})</option>`)
         .join("")}</select>
-       <p class="help">Make more in <a href="#/noise">Noise model</a>, or ${example}</p>`
-    : `<p class="help">You have no noise models yet. <a href="#/noise">Build one</a>, or ${example}</p>`;
+       <p class="help">Make more in <a href="#/noise">Noise model</a>, or try an example: ${example}</p>`
+    : `<p class="help">You have no noise models yet. <a href="#/noise">Build one</a>, or try an example: ${example}</p>`;
   const select = document.getElementById("prop-noise");
   if (select && remembered.noise && shelf.noise.has(remembered.noise)) select.value = remembered.noise;
   select?.addEventListener("change", () => (remembered.noise = select.value));

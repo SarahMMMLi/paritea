@@ -18,7 +18,7 @@ export const TOOLS = [
     provide: "A diagram, X/Y/Z fault weights and the noise-free edges",
     get: "Every fault with its weight, a JSON file and Python code" },
   { id: "propagation", group: "Analyse", title: "Fault propagation", live: true,
-    summary: "See where each fault ends up on the boundary and which detectors it flips.",
+    summary: "See where each fault ends up on the boundary and which detecting regions it flips.",
     provide: "A noise model from your shelf",
     get: "Every effect: detected, undetected or none, with its boundary Paulis and regions" },
   { id: "semantic", group: "Compare", title: "Semantic equivalence", live: true,
@@ -43,7 +43,7 @@ export function renderHome(ctx) {
   const cards = TOOLS.map((t) => `
     <article class="tool-card ${t.live ? "live" : "planned"}">
       <div class="card-top"><span class="group">${t.group}</span>
-        <span class="badge ${t.live ? "badge-live" : "badge-planned"}">${t.live ? "Live" : "Planned"}</span></div>
+        ${t.live ? "" : `<span class="badge badge-planned">Planned</span>`}</div>
       <h3>${t.title}</h3>
       <p>${t.summary}</p>
       <dl class="io"><dt>You provide</dt><dd>${t.provide}</dd><dt>You get</dt><dd>${t.get}</dd></dl>
@@ -71,7 +71,7 @@ export function renderHome(ctx) {
     <div class="grid">${cards}</div>
     <section class="how" aria-label="How it works">
       <div class="how-step"><span class="step-n">1</span><div><strong>Loads once</strong>
-        <p>The first visit downloads Python and paritea (about 12 MB); later visits come from the browser cache.</p></div></div>
+        <p>The first visit downloads Python, paritea and stim (about 13 MB); later visits come from the browser cache.</p></div></div>
       <div class="how-step"><span class="step-n">2</span><div><strong>You choose the inputs</strong>
         <p>Every input has a sensible default, a valid range and a short explanation.</p></div></div>
       <div class="how-step"><span class="step-n">3</span><div><strong>paritea computes locally</strong>

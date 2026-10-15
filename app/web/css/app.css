@@ -147,7 +147,6 @@ main.container { padding-top: 32px; padding-bottom: 64px; min-height: calc(100vh
 .card-top { display: flex; align-items: center; justify-content: space-between; }
 .group { font-size: 12px; font-weight: 600; color: var(--text-3); text-transform: uppercase; letter-spacing: 0.05em; }
 .badge { font-size: 12px; font-weight: 600; padding: 2px 9px; border-radius: 999px; }
-.badge-live { background: var(--ok-weak); color: var(--ok); }
 .badge-planned { background: var(--surface-2); color: var(--text-3); }
 .io { margin: 4px 0 0; display: grid; grid-template-columns: auto 1fr; gap: 4px 10px; font-size: 13px; }
 .io dt { color: var(--text-3); font-weight: 600; }
