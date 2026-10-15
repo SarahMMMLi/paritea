@@ -177,9 +177,9 @@ async function compute(ctx, source, generators) {
     try {
       const result = await ctx.engine.run(op, args);
       if (!result.precomputed) shelf.add(result);
-      showResult(ctx, result);
+      if (results.isConnected) showResult(ctx, result); // unless the visitor went to another page meanwhile
     } catch (err) {
-      showError(ctx, err, args);
+      if (results.isConnected) showError(ctx, err, args);
     } finally {
       ctx.setBusy(false);
     }
@@ -238,7 +238,7 @@ function showResult(ctx, result) {
     <div class="below">
       <section class="card">
         <div class="card-head"><h3 id="table-title">Edges in this web</h3></div>
-        <div class="table-wrap" id="edge-table"></div>
+        <div class="table-wrap" id="edge-table" tabindex="0"></div>
       </section>
       ${codeCardHtml(result.code)}
     </div>`;

@@ -46,7 +46,7 @@ anything it calls, also run the browser check.
 | `paritea_ui/examples.py`, `codegen.py` | Ready-made diagrams with their known answers; the Python shown under every result |
 | `paritea_ui/console.py` | The Python console's namespace and runner |
 | `paritea_ui/compat/` | Stand-ins for galois (`GF2`), recordclass, an `mpl_toolkits` import, stim/sinter imports and `scipy.stats`; used only when the real package is absent |
-| `build/` | `build_wheels.sh` (+ `patches/`), `precompute.py`, `build_site.py`, `check_site.py` (headless-browser check that in-browser results match the native ones) |
+| `build/` | `build_wheels.sh` (+ `patches/`), `precompute.py`, `build_site.py`, `check_site.py` (headless-browser check: in-browser results match the native ones, links, axe-core, phone width) |
 | `tests/` | `test_api.py` (every operation, with known answers), `test_core.py` (generators, layout), `test_compat.py` (stand-ins vs the real galois) |
 
 ## Conventions
@@ -71,6 +71,12 @@ anything it calls, also run the browser check.
   link that recreates the shown result in the address bar, with **Copy link** beside the result. Shelf ids
   (`?diagram=D3`) only mean something inside the tab that made them. Anything read from a link is untrusted: convert or
   escape it before it reaches HTML.
+- **Results stay on their page.** After every `await`, check that the page's results element is still on the page
+  (`results.isConnected`) before showing anything: the visitor may have gone to another tool meanwhile. Shelf updates
+  still happen.
+- **Accessible in light and dark mode.** Text meets WCAG AA contrast (4.5:1) in both themes, links inside text are
+  underlined, and scrollable regions get `tabindex="0"`. The browser check runs axe-core on every page, with a result
+  showing, in both themes, and fails on any violation or on sideways scrolling at phone width.
 - **Symbols never touch.** Every drawing on the page takes node positions from `layout.node_positions`, which spreads
   nodes at least `MIN_SPACING` apart without bending wires. New views, generators and labels must keep a visible gap
   between symbols too; a test checks every generator.

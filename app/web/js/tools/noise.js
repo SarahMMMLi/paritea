@@ -121,15 +121,16 @@ function renderDiagramPick(ctx, state, live) {
     loadDiagram(ctx, state, select.value);
   }
   document.getElementById("use-steane").addEventListener("click", async (e) => {
+    const results = document.getElementById("results");
     await withBusyButton(e.currentTarget, "Opening…", async () => {
       try {
         const entry = await ctx.engine.run("diagram_example", { example: "steane-state" });
         shelf.add(entry);
         remembered.diagram = entry.id;
         if (!remembered.picks.has(entry.id)) remembered.picks.set(entry.id, edgesTouching(entry.diagram, "X"));
-        renderDiagramPick(ctx, state, live);
+        if (results.isConnected) renderDiagramPick(ctx, state, live); // unless the visitor went to another page
       } catch (err) {
-        document.getElementById("results").innerHTML = errorHtml("Couldn't open the example.", err);
+        if (results.isConnected) results.innerHTML = errorHtml("Couldn't open the example.", err);
       }
     });
   });
@@ -204,18 +205,21 @@ async function build(ctx, state) {
     try {
       const noise = await ctx.engine.run("noise_model", { diagram: remembered.diagram, weights, noise_free: noiseFree });
       shelf.addNoise(noise);
-      showResult(noise);
+      if (results.isConnected) showResult(noise); // unless the visitor went to another page meanwhile
     } catch (err) {
+      if (!results.isConnected) return;
       results.innerHTML = errorHtml(err.type === "UserError" ? "Please check this:" : "Building the noise model failed.", err);
     }
   });
 }
 
 async function showNoise(ctx, id) {
+  const results = document.getElementById("results");
   try {
-    showResult(await ctx.engine.run("noise_get", { noise: id }));
+    const noise = await ctx.engine.run("noise_get", { noise: id });
+    if (results.isConnected) showResult(noise);
   } catch (err) {
-    document.getElementById("results").innerHTML = errorHtml("Couldn't show this noise model.", err);
+    if (results.isConnected) results.innerHTML = errorHtml("Couldn't show this noise model.", err);
   }
 }
 
@@ -238,7 +242,7 @@ function showResult(noise) {
       <section class="card">
         <div class="card-head"><h3>Faults (${s.Faults})</h3>
           <button type="button" class="btn btn-ghost btn-small" id="noise-json">Download JSON</button></div>
-        <div class="table-wrap">${rows.length ? `<table><thead><tr><th>#</th><th>Edge</th><th>Between nodes</th><th>Pauli</th><th>Weight</th></tr></thead>
+        <div class="table-wrap" tabindex="0">${rows.length ? `<table><thead><tr><th>#</th><th>Edge</th><th>Between nodes</th><th>Pauli</th><th>Weight</th></tr></thead>
           <tbody>${rows
             .map(([edges, weight], i) => edges
               .map(([e, p]) => `<tr><td>${i + 1}</td><td>${e}</td><td>${endpoints.get(e)}</td><td><span class="pauli-chip ${p}">${p}</span></td><td>${weight}</td></tr>`)
@@ -291,7 +295,7 @@ function renderNoiseShelf(ctx) {
         shelf.removeNoise(id);
         if (remembered.shown === id) {
           remembered.shown = null;
-          document.getElementById("results").innerHTML = "";
+          if (box.isConnected) document.getElementById("results").innerHTML = "";
         }
       }
     }),

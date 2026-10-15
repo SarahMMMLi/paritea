@@ -337,6 +337,93 @@ def check_console(page) -> list[str]:
     return failures
 
 
+def check_leaving(page) -> list[str]:
+    """A result that arrives after the visitor went to another page stays off that page, and still reaches the shelf."""
+    pill = "document.getElementById('engine-status').dataset.state"
+    page.goto(URL + "#/diagrams")
+    page.wait_for_selector("#shelf .section-head")
+    before = page.evaluate("document.querySelectorAll('#shelf .shelf-list li').length")
+    page.evaluate("window.lastResult = null")
+    page.goto(URL + "#/webs?generator=rotated-surface-code-memory-experiment&distance=7&rounds=5")
+    page.wait_for_function(f"{pill} === 'busy'")
+    page.goto(URL + "#/semantic")
+    still_running = page.evaluate(f"{pill} === 'busy'")
+    page.wait_for_function(f"{pill} === 'ready'", timeout=300_000)
+    page.wait_for_timeout(300)
+    leaked = page.evaluate("document.getElementById('results').textContent.includes('stabilising web')")
+    leaked = leaked or page.evaluate("window.lastResult !== null")
+    page.goto(URL + "#/diagrams")
+    page.wait_for_selector("#shelf .section-head")
+    grew = page.evaluate("document.querySelectorAll('#shelf .shelf-list li').length") - before
+    ok = still_running and not leaked and grew == 1
+    print(
+        f"{'OK  ' if ok else 'FAIL'} Leaving mid-run: left while running {still_running}, result kept off the next "
+        f"page {not leaked}, shelf grew by {grew}"
+    )
+    return [] if ok else ["a result arriving after leaving its page was shown elsewhere, or missed the shelf"]
+
+
+AXE = "https://cdnjs.cloudflare.com/ajax/libs/axe-core/4.10.2/axe.min.js"
+# Each page with a result on it, reached through links where possible (D1 and N1 come from the first two steps).
+PAGES_WITH_RESULTS = [
+    ("diagrams", "#/diagrams?example=steane-state", "window.lastEntry"),
+    ("noise", "#/noise?diagram=D1", "#run"),
+    ("propagation", "#/propagation?noise=N1&run=1", "#results .headline"),
+    ("webs", "#/webs?generator=z-web-grid&qubits=3&depth=3", "window.lastResult"),
+    ("semantic", "#/semantic", "[data-pair='2']"),
+    ("fault", "#/fault", "[data-pair='1']"),
+    ("dem", "#/dem?distance=3&rounds=2&p=0.001", "window.lastDem"),
+    ("console", "#/console", "#console-run"),
+    ("home", "#/", ".tool-card"),
+]
+# What to click on pages that need a click to show a result, and what then appears.
+CLICKS = {
+    "noise": ("#run", "#results .headline"),
+    "semantic": ("[data-pair='2']", "#results .verdict"),
+    "fault": ("[data-pair='1']", "#results .verdict"),
+    "console": ("#console-run", "#console-output .cell"),
+}
+
+
+def check_accessibility(browser) -> list[str]:
+    """axe-core finds no violations on any page, with a result showing, in light and dark mode; no page scrolls sideways
+    on a phone."""
+    failures = []
+    for scheme in ["light", "dark"]:
+        page = browser.new_page(viewport={"width": 1280, "height": 860}, reduced_motion="reduce", color_scheme=scheme)
+        page.goto(URL)
+        page.wait_for_function(READY, timeout=300_000)
+        for name, link, ready in PAGES_WITH_RESULTS:
+            page.evaluate("window.lastEntry = window.lastResult = window.lastDem = null")
+            page.goto(URL + link)
+            if ready.startswith("window."):
+                page.wait_for_function(ready, timeout=120_000)
+            else:
+                page.wait_for_selector(ready, timeout=120_000)
+            if name in CLICKS:
+                page.click(CLICKS[name][0])
+                page.wait_for_selector(CLICKS[name][1], timeout=120_000)
+            page.mouse.move(0, 0)  # no hover states
+            if page.evaluate("typeof axe") == "undefined":
+                page.add_script_tag(url=AXE)
+            violations = page.evaluate(
+                """async () => (await axe.run(document, { resultTypes: ['violations'] })).violations
+                  .map((v) => `${v.id}: ${v.nodes.slice(0, 3).map((n) => n.target.join(' ')).join(', ')}`)"""
+            )
+            page.set_viewport_size({"width": 390, "height": 844})
+            sideways = page.evaluate("document.documentElement.scrollWidth - document.documentElement.clientWidth")
+            page.set_viewport_size({"width": 1280, "height": 860})
+            ok = not violations and sideways <= 0
+            print(
+                f"{'OK  ' if ok else 'FAIL'} Accessibility ({scheme}): {name}: {violations or 'no axe violations'}"
+                f"{'' if sideways <= 0 else f', scrolls sideways on a phone by {sideways} px'}"
+            )
+            if not ok:
+                failures.append(f"accessibility of {name} ({scheme}): {violations}, sideways {sideways}")
+        page.close()
+    return failures
+
+
 def check_links(browser) -> tuple[list[str], list[str]]:
     """Open shared links in a fresh tab: each must recreate its result and keep its address; bad links are explained."""
     failures = []
@@ -458,9 +545,11 @@ def main() -> int:
         failures += check_dem(page)
         failures += check_console(page)
         failures += check_fault(page)
+        failures += check_leaving(page)
         link_failures, link_logs = check_links(browser)
         failures += link_failures
         logs += link_logs
+        failures += check_accessibility(browser)
 
         # Show a detecting region on the first example for a screenshot.
         page.goto(URL + "#/webs")

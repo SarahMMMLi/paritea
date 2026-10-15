@@ -230,22 +230,25 @@ function importTab(ctx) {
 // ---------------------------------------------------------------- Results
 
 async function run(ctx, button, busyLabel, op, args) {
+  const results = document.getElementById("results");
   await withBusyButton(button, busyLabel, async () => {
     try {
       const entry = await ctx.engine.run(op, args);
       shelf.add(entry);
-      showEntry(ctx, entry);
+      if (results.isConnected) showEntry(ctx, entry); // unless the visitor went to another page meanwhile
     } catch (err) {
-      showError(err.type === "UserError" ? "Please check this:" : "That didn't work.", err);
+      if (results.isConnected) showError(err.type === "UserError" ? "Please check this:" : "That didn't work.", err);
     }
   });
 }
 
 async function showDiagram(ctx, id) {
+  const results = document.getElementById("results");
   try {
-    showEntry(ctx, await ctx.engine.run("diagram_get", { diagram: id }));
+    const entry = await ctx.engine.run("diagram_get", { diagram: id });
+    if (results.isConnected) showEntry(ctx, entry);
   } catch (err) {
-    showError("Couldn't show this diagram.", err);
+    if (results.isConnected) showError("Couldn't show this diagram.", err);
   }
 }
 
@@ -343,7 +346,7 @@ function renderShelf(ctx) {
         shelf.remove(id);
         if (remembered.shown === id) {
           remembered.shown = null;
-          document.getElementById("results").innerHTML = "";
+          if (box.isConnected) document.getElementById("results").innerHTML = "";
         }
       }
     }),

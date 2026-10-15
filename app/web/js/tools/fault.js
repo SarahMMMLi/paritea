@@ -116,6 +116,7 @@ function renderPick(live) {
 }
 
 async function usePair(ctx, pair, button, live) {
+  const results = document.getElementById("results");
   let ids;
   await withBusyButton(button, "Preparing…", async () => {
     try {
@@ -128,10 +129,10 @@ async function usePair(ctx, pair, button, live) {
         ids = made.map((d) => d.id);
       }
     } catch (err) {
-      document.getElementById("results").innerHTML = errorHtml("Couldn't prepare the pair.", err);
+      if (results.isConnected) results.innerHTML = errorHtml("Couldn't prepare the pair.", err);
     }
   });
-  if (!ids) return;
+  if (!ids || !results.isConnected) return; // it failed, or the visitor went to another page meanwhile
   [remembered.a, remembered.b] = ids;
   remembered.limit = "none";
   remembered.smallest = true;
@@ -173,10 +174,11 @@ async function check(ctx) {
         max_weight: noLimit ? null : maxWeight,
         smallest,
       });
-      showResult(result);
+      if (results.isConnected) showResult(result); // unless the visitor went to another page meanwhile
     } catch (err) {
+      if (err.type === "Cancelled") window.lastFault = { cancelled: true };
+      if (!results.isConnected) return;
       if (err.type === "Cancelled") {
-        window.lastFault = { cancelled: true };
         results.innerHTML = noticeHtml(
           "Cancelled. The engine is restarting (a few seconds), so your shelf is empty again: build the diagrams and " +
             "noise models again, or use a pair.",

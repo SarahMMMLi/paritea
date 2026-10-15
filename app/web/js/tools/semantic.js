@@ -89,6 +89,8 @@ function renderPick(live) {
 }
 
 async function usePair(ctx, pair, button, live) {
+  const results = document.getElementById("results");
+  let ready = false;
   await withBusyButton(button, "Preparing…", async () => {
     try {
       const a = await ctx.engine.run(...pair.a);
@@ -97,12 +99,13 @@ async function usePair(ctx, pair, button, live) {
       shelf.add(b);
       remembered.a = a.id;
       remembered.b = b.id;
-      renderPick(live);
+      ready = true;
     } catch (err) {
-      document.getElementById("results").innerHTML = errorHtml("Couldn't prepare the pair.", err);
-      return;
+      if (results.isConnected) results.innerHTML = errorHtml("Couldn't prepare the pair.", err);
     }
   });
+  if (!ready || !results.isConnected) return; // it failed, or the visitor went to another page meanwhile
+  renderPick(live);
   if (document.getElementById("sem-a")) document.getElementById("sem-form").requestSubmit();
 }
 
@@ -119,8 +122,10 @@ async function check(ctx) {
   await withBusyButton(document.getElementById("run"), "Checking…", async () => {
     ctx.setBusy(true);
     try {
-      showResult(await ctx.engine.run("semantic_equivalence", { a: a.value, b: b.value }));
+      const result = await ctx.engine.run("semantic_equivalence", { a: a.value, b: b.value });
+      if (results.isConnected) showResult(result); // unless the visitor went to another page meanwhile
     } catch (err) {
+      if (!results.isConnected) return;
       results.innerHTML = errorHtml(err.type === "UserError" ? "Please check this:" : "The check failed.", err);
     } finally {
       ctx.setBusy(false);

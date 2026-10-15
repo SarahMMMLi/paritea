@@ -39,7 +39,7 @@ export function codeCardHtml(code, title = "Python code that reproduces this") {
         <span class="row-actions">
           ${runnable ? `<button type="button" class="btn btn-ghost btn-small" data-open-console>Open in console</button>` : ""}
           <button type="button" class="btn btn-ghost btn-small" data-copy>Copy</button></span></div>
-      <pre class="code"><code>${escapeHtml(code)}</code></pre>
+      <pre class="code" tabindex="0"><code>${escapeHtml(code)}</code></pre>
     </section>`;
 }
 

@@ -111,9 +111,9 @@ async function build(ctx) {
   const results = document.getElementById("results");
   let args;
   if (remembered.source === "preset") {
-    const d = Number(document.getElementById("dem-d").value);
-    const r = Number(document.getElementById("dem-r").value);
-    const p = Number(document.getElementById("dem-p").value);
+    // An empty or unreadable number input has the value "", which Number() would turn into 0.
+    const number = (id) => (document.getElementById(id).value === "" ? NaN : Number(document.getElementById(id).value));
+    const [d, r, p] = [number("dem-d"), number("dem-r"), number("dem-p")];
     const problem =
       !Number.isInteger(d) || d < 2 || d > 9 ? "The distance must be a whole number from 2 to 9."
       : !Number.isInteger(r) || r < 1 || r > 20 ? "The number of rounds must be a whole number from 1 to 20."
@@ -134,8 +134,9 @@ async function build(ctx) {
     try {
       const result = await ctx.engine.run("stim_dem", args);
       shelf.add(result.entry);
-      showResult(result);
+      if (results.isConnected) showResult(result); // unless the visitor went to another page meanwhile
     } catch (err) {
+      if (!results.isConnected) return;
       results.innerHTML = errorHtml(err.type === "UserError" ? "Please check this:" : "Building the DEM failed.", err);
     } finally {
       ctx.setBusy(false);
@@ -181,7 +182,7 @@ function showResult(result) {
     </div>
     <section class="card">
       <div class="card-head"><h3>Detector error model (${plural(s["Error mechanisms"], "line")})</h3></div>
-      <pre class="code dem-text"><code>${escapeHtml(shown)}</code></pre>
+      <pre class="code dem-text" tabindex="0"><code>${escapeHtml(shown)}</code></pre>
       ${lines.length > MAX_DEM_LINES ? `<p class="truncated">Showing the first ${MAX_DEM_LINES} lines; the .dem file has them all.</p>` : ""}
     </section>
     <div class="below">

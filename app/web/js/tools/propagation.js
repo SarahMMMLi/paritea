@@ -82,6 +82,7 @@ function renderNoisePick(ctx, live) {
   if (select && remembered.noise && shelf.noise.has(remembered.noise)) select.value = remembered.noise;
   select?.addEventListener("change", () => (remembered.noise = select.value));
   document.getElementById("use-demo").addEventListener("click", async (e) => {
+    const results = document.getElementById("results");
     await withBusyButton(e.currentTarget, "Preparing…", async () => {
       try {
         const entry = await ctx.engine.run("diagram_example", { example: "steane-circuit" });
@@ -93,10 +94,11 @@ function renderNoisePick(ctx, live) {
         });
         shelf.addNoise(noise);
         remembered.noise = noise.id;
+        if (!results.isConnected) return; // the visitor went to another page meanwhile
         renderNoisePick(ctx, live);
         document.getElementById("prop-form").requestSubmit();
       } catch (err) {
-        document.getElementById("results").innerHTML = errorHtml("Couldn't prepare the example.", err);
+        if (results.isConnected) results.innerHTML = errorHtml("Couldn't prepare the example.", err);
       }
     });
   });
@@ -113,8 +115,10 @@ async function propagate(ctx) {
   await withBusyButton(document.getElementById("run"), "Propagating…", async () => {
     ctx.setBusy(true);
     try {
-      showResult(await ctx.engine.run("propagation", { noise: select.value }));
+      const result = await ctx.engine.run("propagation", { noise: select.value });
+      if (results.isConnected) showResult(result); // unless the visitor went to another page meanwhile
     } catch (err) {
+      if (!results.isConnected) return;
       results.innerHTML = errorHtml(err.type === "UserError" ? "Please check this:" : "Fault propagation failed.", err);
     } finally {
       ctx.setBusy(false);
@@ -150,7 +154,7 @@ function showResult(result) {
       <p class="card-note"><strong>Detected</strong>: flips at least one detecting region, so a check notices it.
         <strong>Undetected</strong>: changes the outputs (or inputs) but no check notices it.
         <strong>No effect</strong>: equivalent to doing nothing. Regions are numbered as on the Pauli webs page.</p>
-      <div class="table-wrap tall"><table>
+      <div class="table-wrap tall" tabindex="0"><table>
         <thead><tr><th>Kind</th><th>Left on the boundary</th><th>Regions flipped</th><th>Faults</th><th>Lowest weight</th></tr></thead>
         <tbody>${rows
           .map(
@@ -170,7 +174,7 @@ function showResult(result) {
         <p class="card-note">One per stabiliser: a single Pauli on one boundary edge that flips that stabiliser and no
           other. paritea writes each fault's effect on the boundary in terms of these.
           ${plural(result.regions, "detecting region")} in this diagram.</p>
-        <div class="table-wrap"><table><thead><tr><th>Stabiliser</th><th>Flip operator</th></tr></thead>
+        <div class="table-wrap" tabindex="0"><table><thead><tr><th>Stabiliser</th><th>Flip operator</th></tr></thead>
           <tbody>${result.flip_operators
             .map((op, i) => `<tr><td>${i + 1}</td><td>${boundaryText(op, result.labels)}</td></tr>`)
             .join("") || `<tr><td colspan="2" class="muted-cell">This diagram has no stabilisers.</td></tr>`}</tbody></table></div>

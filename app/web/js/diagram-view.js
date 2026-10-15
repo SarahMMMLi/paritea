@@ -10,7 +10,7 @@ const EXPORT_CSS = `
   .edge { stroke: #334155; stroke-width: 1.4; }
   .has-web .edge { opacity: 0.35; }
   .web-edge { stroke-width: 7; stroke-linecap: round; opacity: 0.85; }
-  .web-edge.X { stroke: #d62728; } .web-edge.Y { stroke: #1f77b4; } .web-edge.Z { stroke: #2ca02c; }
+  .web-edge.X { stroke: #d62728; } .web-edge.Y { stroke: #1f77b4; } .web-edge.Z { stroke: #15803d; }
   .edge.noise-free { stroke-dasharray: 5 4; opacity: 0.5; }
   .node { stroke: #1e293b; stroke-width: 1.1; }
   .node.Z { fill: #ccffcc; } .node.X { fill: #ff8888; } .node.H { fill: #ffff66; } .node.B { fill: #0f172a; stroke: none; }
