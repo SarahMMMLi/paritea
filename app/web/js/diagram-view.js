@@ -5,6 +5,15 @@ const SVG_NS = "http://www.w3.org/2000/svg";
 const UNIT = 40; // pixels per diagram coordinate unit at zoom 1
 const MAX_PHASE_LABELS = 800;
 const NODE_NAMES = { Z: "Z spider", X: "X spider", H: "H box", B: "Boundary" };
+// Concrete colours for exported SVG files, which cannot use the page's CSS variables.
+const EXPORT_CSS = `
+  .edge { stroke: #334155; stroke-width: 1.4; }
+  .has-web .edge { opacity: 0.35; }
+  .web-edge { stroke-width: 7; stroke-linecap: round; opacity: 0.85; }
+  .web-edge.X { stroke: #d62728; } .web-edge.Y { stroke: #1f77b4; } .web-edge.Z { stroke: #2ca02c; }
+  .node { stroke: #1e293b; stroke-width: 1.1; }
+  .node.Z { fill: #ccffcc; } .node.X { fill: #ff8888; } .node.H { fill: #ffff66; } .node.B { fill: #0f172a; stroke: none; }
+  .phase { font: 11px ui-monospace, Menlo, monospace; fill: #475569; text-anchor: middle; }`;
 
 function el(name, attrs = {}, parent = null) {
   const node = document.createElementNS(SVG_NS, name);
@@ -54,7 +63,8 @@ export class DiagramView {
     for (const n of diagram.nodes) {
       const x = n.x * UNIT;
       const y = n.y * UNIT;
-      const phase = phaseLabel(n.phase);
+      // An H box is always a Hadamard to paritea; pyzx gives them phase 1, paritea 0, so neither is shown.
+      const phase = n.type === "H" && (n.phase === "0" || n.phase === "1") ? "" : phaseLabel(n.phase);
       const tip = [`${NODE_NAMES[n.type] ?? n.type} ${n.id}`, phase && `phase ${phase}`, role.get(n.id)].filter(Boolean).join(" · ");
       if (n.type === "H") el("rect", { class: "node H", x: x - 9, y: y - 9, width: 18, height: 18, "data-tip": tip }, this.nodes);
       else el("circle", { class: `node ${n.type}`, cx: x, cy: y, r: n.type === "B" ? 4.5 : 11.5, "data-tip": tip }, this.nodes);
@@ -85,6 +95,22 @@ export class DiagramView {
         "data-tip": `Edge ${e} carries ${pauli}`,
       }, this.web);
     }
+  }
+
+  /** The whole drawing as a standalone SVG file. */
+  toSVG() {
+    const copy = this.svg.cloneNode(true);
+    copy.querySelectorAll(".hit").forEach((n) => n.remove());
+    copy.querySelectorAll("[data-tip]").forEach((n) => n.removeAttribute("data-tip"));
+    const { x, y, w, h } = this.bounds;
+    copy.setAttribute("xmlns", SVG_NS);
+    copy.setAttribute("viewBox", `${x} ${y} ${w} ${h}`);
+    copy.setAttribute("width", String(Math.round(w)));
+    copy.setAttribute("height", String(Math.round(h)));
+    const style = document.createElementNS(SVG_NS, "style");
+    style.textContent = EXPORT_CSS;
+    copy.prepend(style);
+    return new XMLSerializer().serializeToString(copy);
   }
 
   fit() {

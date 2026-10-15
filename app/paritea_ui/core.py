@@ -3,15 +3,25 @@
 Nothing in this module imports Streamlit, so everything here can be unit tested and cached.
 """
 
+import random
 from collections import Counter
 from collections.abc import Callable
 from dataclasses import dataclass
 
 from paritea import PauliString
 from paritea.diagram import Diagram, NodeType
-from paritea.generate import shor_extraction, steane_code_stabilisers, surface_code_memory_experiment, zweb
+from paritea.generate import (
+    clifford,
+    rotated_planar_surface_code_stabilisers,
+    shor_extraction,
+    steane_code_stabilisers,
+    surface_code_memory_experiment,
+    zweb,
+)
 from paritea.glue.pyzx import from_pyzx
 from paritea.web import compute_pauli_webs
+
+from paritea_ui.layout import UNSET, place_unpositioned
 
 
 @dataclass(frozen=True)
@@ -23,6 +33,7 @@ class IntParam:
     min_value: int
     max_value: int
     help: str = ""
+    step: int = 1
 
 
 @dataclass(frozen=True)
@@ -42,8 +53,33 @@ def _steane_shor_extraction(*, rounds: int) -> Diagram:
     return shor_extraction(steane_code_stabilisers(), qubits=7, repeat=rounds)
 
 
+def _surface_shor_extraction(*, size: int, rounds: int) -> Diagram:
+    if size % 2 == 0:
+        raise ValueError("The code size L must be odd: paritea's surface-code stabilisers only support odd sizes.")
+    return shor_extraction(rotated_planar_surface_code_stabilisers(size), qubits=size * size, repeat=rounds)
+
+
 def _zweb(*, qubits: int, depth: int) -> Diagram:
     return from_pyzx(zweb(qubits, depth), positions=True)
+
+
+def _random_clifford(*, qubits: int, spiders: int, seed: int) -> Diagram:
+    # paritea's generator draws from the global random module, so seed it and restore it afterwards.
+    state = random.getstate()
+    random.seed(seed)
+    try:
+        graph = clifford(qubits, spiders)
+    finally:
+        random.setstate(state)
+    graph.auto_detect_io()  # boundaries sit left (inputs) or right (outputs) of their neighbours
+    d = from_pyzx(graph, positions=True)
+    # The generator puts every internal spider in one column; spread the columns out and let the layout place them.
+    for n in d.node_indices():
+        if d.x(n) == 0.5:
+            d.set_x(n, UNSET).set_y(n, UNSET)
+        elif d.x(n) != UNSET:
+            d.set_x(n, d.x(n) * 10)
+    return place_unpositioned(d)
 
 
 # To offer a new kind of diagram in the UI, add an entry here. Every generator must return a diagram with real IO set
@@ -64,6 +100,15 @@ GENERATORS: dict[str, DiagramGenerator] = {
         },
         build=_steane_shor_extraction,
     ),
+    "Rotated surface code, Shor syndrome extraction": DiagramGenerator(
+        description="Shor-style syndrome extraction for the rotated planar surface code of size L by L, post-selected "
+        "on trivial syndromes.",
+        params={
+            "size": IntParam("Size L", default=3, min_value=3, max_value=5, step=2, help="Odd sizes only"),
+            "rounds": IntParam("Rounds", default=1, min_value=1, max_value=3, help="Syndrome extraction rounds"),
+        },
+        build=_surface_shor_extraction,
+    ),
     "Z-web grid": DiagramGenerator(
         description="A grid of Z spiders in which every sub-rectangle is an X-error detecting region.",
         params={
@@ -71,6 +116,15 @@ GENERATORS: dict[str, DiagramGenerator] = {
             "depth": IntParam("Depth", default=2, min_value=1, max_value=10),
         },
         build=_zweb,
+    ),
+    "Random Clifford diagram": DiagramGenerator(
+        description="A random, possibly non-unitary Clifford diagram. The same seed always gives the same diagram.",
+        params={
+            "qubits": IntParam("Qubits", default=3, min_value=1, max_value=6),
+            "spiders": IntParam("Spiders", default=10, min_value=1, max_value=30, help="Spiders inside the diagram"),
+            "seed": IntParam("Seed", default=1, min_value=0, max_value=9999, help="Same seed, same diagram"),
+        },
+        build=_random_clifford,
     ),
 }
 

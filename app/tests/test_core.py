@@ -1,3 +1,4 @@
+import math
 import pickle
 
 import pytest
@@ -6,7 +7,8 @@ from paritea.diagram import Diagram, NodeType
 from paritea.web import compute_pauli_webs
 
 from paritea_ui.core import GENERATORS, build_diagram, diagram_summary, pauli_webs
-from paritea_ui.drawing import draw_diagram, node_positions
+from paritea_ui.drawing import draw_diagram
+from paritea_ui.layout import MIN_SPACING, node_positions
 
 
 def _defaults(generator: str) -> dict[str, int]:
@@ -59,6 +61,19 @@ def test_draw_diagram_with_each_web(generator: str) -> None:
 
     for web in [None, *stabilisers[:2], *regions[:2]]:
         assert isinstance(draw_diagram(d, web=web, show_phases=True), Figure)
+
+
+@pytest.mark.parametrize("generator", list(GENERATORS))
+def test_node_positions_keep_symbols_apart_and_wires_straight(generator: str) -> None:
+    d = build_diagram(generator, **_defaults(generator))
+
+    pos = node_positions(d)
+
+    nodes = list(pos)
+    assert min(math.dist(pos[a], pos[b]) for i, a in enumerate(nodes) for b in nodes[i + 1 :]) >= MIN_SPACING
+    for s, t in d.edge_list():
+        assert (d.x(s) == d.x(t)) == (pos[s][0] == pos[t][0])
+        assert (d.y(s) == d.y(t)) == (pos[s][1] == pos[t][1])
 
 
 def test_node_positions_fall_back_to_a_layout_when_positions_are_missing() -> None:

@@ -40,6 +40,90 @@ def run_case(page, generator: str, params: dict[str, int]) -> dict:
     return page.evaluate("window.lastResult")
 
 
+def build(page, click: str) -> dict:
+    page.evaluate("window.lastEntry = null")
+    page.click(click)
+    page.wait_for_function("window.lastEntry !== null", timeout=120_000)
+    return page.evaluate("window.lastEntry")
+
+
+def webs_of_shown_diagram(page) -> tuple[int, int]:
+    page.evaluate("window.lastResult = null")
+    page.click("text=Compute Pauli webs →")
+    page.wait_for_function("window.lastResult !== null", timeout=120_000)
+    result = page.evaluate("window.lastResult")
+    return len(result["stabilisers"]), len(result["regions"])
+
+
+def check_diagrams(page) -> list[str]:
+    """Generate, open an example and import a file on the Diagrams page, then compute their webs."""
+    failures = []
+    cases = [
+        ("Z-web grid 3x3", ("generate", "Z-web grid", {"qubits": 3, "depth": 3}), (6, 4)),
+        ("Steane preparation circuit", ("example", "steane-circuit"), (7, 1)),
+        (
+            "Random Clifford, seed 1",
+            ("generate", "Random Clifford diagram", {"qubits": 3, "spiders": 10, "seed": 1}),
+            (6, 0),
+        ),
+        ("Sample QASM circuit", ("import",), (4, 0)),
+    ]
+    for i, (label, how, expected) in enumerate(cases):
+        page.goto(URL + "#/diagrams")
+        if how[0] == "generate":
+            page.click("[data-tab='generate']")
+            page.select_option("#generator", how[1])
+            for k, v in how[2].items():
+                page.fill(f"#p-{k}", str(v))
+            entry = build(page, "#build")
+        elif how[0] == "example":
+            page.click("[data-tab='examples']")
+            entry = build(page, f"[data-example='{how[1]}']")
+        else:
+            page.click("[data-tab='import']")
+            page.click("#sample")
+            entry = build(page, "#import-run")
+        page.screenshot(path=SHOTS / f"6-diagram-{i}.png", full_page=True)
+        got = webs_of_shown_diagram(page)
+        ok = got == expected and not entry["problems"]
+        size = f"{entry['id']}, {entry['summary']['Nodes']} nodes"
+        print(f"{'OK  ' if ok else 'FAIL'} Diagrams: {label} -> {size}; webs {got}")
+        if not ok:
+            failures.append(f"{label}: webs {got} != {expected} or problems {entry['problems']}")
+
+    # A non-Clifford circuit is explained, not crashed on.
+    page.goto(URL + "#/diagrams")
+    page.click("[data-tab='import']")
+    page.fill("#import-text", 'OPENQASM 2.0;\ninclude "qelib1.inc";\nqreg q[1];\nt q[0];\n')
+    page.click("#import-run")
+    page.wait_for_selector("#results .alert-error", timeout=60_000)
+    message = page.inner_text("#results .alert-error")
+    ok = "Clifford" in message
+    print(f"{'OK  ' if ok else 'FAIL'} Diagrams: non-Clifford QASM explained: {message.splitlines()[0][:90]}")
+    if not ok:
+        failures.append(f"non-Clifford import message: {message}")
+
+    # Downloads: PyZX JSON and SVG of the shown diagram.
+    page.click("[data-tab='examples']")
+    build(page, "[data-example='steane-state']")
+    with page.expect_download() as download:
+        page.click("[data-export='pyzx']")
+    pyzx = json.loads(Path(download.value.path()).read_text())
+    with page.expect_download() as download:
+        page.click("[data-export='svg']")
+    svg = Path(download.value.path()).read_text()
+    ok = pyzx.get("version") == 2 and len(pyzx["inputs"]) + len(pyzx["outputs"]) == 7 and svg.startswith("<svg")
+    print(f"{'OK  ' if ok else 'FAIL'} Diagrams: downloads (PyZX JSON with {len(pyzx['outputs'])} outputs, SVG)")
+    if not ok:
+        failures.append("downloads")
+    shelf = page.locator(".shelf-list li").count()
+    print(f"{'OK  ' if shelf >= 5 else 'FAIL'} Diagrams: shelf lists {shelf} diagrams")
+    if shelf < 5:
+        failures.append(f"shelf lists {shelf}")
+    page.screenshot(path=SHOTS / "7-shelf.png", full_page=True)
+    return failures
+
+
 def main() -> int:
     failures = []
     with sync_playwright() as p:
@@ -75,7 +159,11 @@ def main() -> int:
                 failures.append(f"{generator} {params}: browser {counts} != native {expected}")
             page.screenshot(path=SHOTS / f"3-webs-{i}.png", full_page=True)
 
+        failures += check_diagrams(page)
+
         # Show a detecting region on the first example for a screenshot.
+        page.goto(URL + "#/webs")
+        page.click("[data-source='generate']")
         run_case(page, *CASES[0])
         page.click(".segmented button[data-kind='regions']")
         page.click("#next")

@@ -11,7 +11,16 @@ APP = Path(__file__).resolve().parent.parent
 WEB = APP / "web"
 
 # The Streamlit-free part of paritea_ui that the browser engine imports.
-ENGINE_MODULES = ["__init__.py", "core.py", "api.py", "layout.py"]
+ENGINE_MODULES = [
+    "__init__.py",
+    "api.py",
+    "codegen.py",
+    "core.py",
+    "examples.py",
+    "layout.py",
+    "session.py",
+    "validate.py",
+]
 
 
 def package_python() -> Path:

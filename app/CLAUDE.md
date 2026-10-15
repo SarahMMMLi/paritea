@@ -42,6 +42,9 @@ A `VIRTUAL_ENV ... does not match` warning from uv just means another venv is ac
 - **New page** → add `paritea_ui/pages/<name>.py`, register it in `streamlit_app.py`, link it from `home.py`, and add an
   `AppTest` in `tests/test_app.py` (switch to the page, interact, assert `not at.exception` and `not at.error`).
 - Draw with `matplotlib.figure.Figure()` (as `drawing.py` does), not `pyplot`, and show it with `st.pyplot(fig)`.
+- **Symbols never touch.** Every drawing (Streamlit and `web/`) takes node positions from `layout.node_positions`,
+  which spreads nodes at least `MIN_SPACING` apart without bending wires. New views, generators and labels must keep
+  a visible gap between symbols too; a test checks every generator.
 - Style: ruff with the library's rules (`../ruff.toml`, line length 120). Keyword-only boolean parameters (`FBT`).
 
 ## Web page (`web/`): paritea in the browser
@@ -61,10 +64,20 @@ python3 -m http.server 8000 --directory web    # http://localhost:8000
 |---|---|
 | `web/js/worker.js` | The engine: loads Pyodide, installs `web/wheels` with `deps=False`, calls `paritea_ui.api.dispatch` |
 | `web/js/engine.js` | Worker client; falls back to `web/data` (preview mode) if the engine cannot start, or with `?engine=precomputed` |
-| `web/js/main.js`, `web/js/diagram-view.js`, `web/css/app.css` | Tool catalogue, Pauli webs tool, SVG diagram view, design tokens |
+| `web/js/main.js` | Boot, engine status pill and hash routing (`#/`, `#/diagrams`, `#/webs?diagram=D3&run=1`) |
+| `web/js/tools/*.js` | One module per page: `home.js` (tool catalogue), `diagrams.js`, `webs.js` |
+| `web/js/ui.js`, `web/js/shelf.js`, `web/js/diagram-view.js` | Shared result blocks and viewer, the page's copy of the shelf, SVG drawing |
 | `paritea_ui/api.py` | JSON-in/JSON-out operations the page calls; register new ones in `OPS` |
+| `paritea_ui/session.py` | The shelf: every diagram made in the session (`D1`, `D2`, ...); tools work on these objects |
+| `paritea_ui/validate.py` | Plain-word checks run before anything reaches Rust (panics become `UserError` messages) |
+| `paritea_ui/examples.py`, `codegen.py` | Ready-made diagrams with their known answers; the Python shown under every result |
 | `paritea_ui/compat/` | Stand-ins for galois (`GF2`), recordclass and an `mpl_toolkits` import; used only when the real package is absent |
 | `build/check_site.py` | Headless-browser check that in-browser results match the native ones (needs Playwright) |
+
+- **New tool page** → a module in `web/js/tools/`, a route in `web/js/main.js`, `Live` in the catalogue
+  (`tools/home.js`), its operations in `paritea_ui/api.py` with tests in `tests/test_api.py`, and a flow in
+  `build/check_site.py`. Add new Python modules to `ENGINE_MODULES` in `build/build_site.py`.
+- **Examples need a known answer**, asserted by `tests/test_api.py` and shown on the page.
 
 - `build_wheels.sh` builds paritea from a scratch copy of the repository, so no upstream file is modified.
 - Never build the browser wheel with the `release-py` profile: `panic = "abort"` turns any Rust panic into a dead engine.

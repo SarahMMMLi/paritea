@@ -5,34 +5,28 @@ functions run natively, which is how their results are tested and precomputed.
 """
 
 import json
+import math
 import sys
 import time
 import traceback
+from collections import Counter
 from collections.abc import Callable
 from typing import Any
 
+import pyzx as zx
 from paritea import PauliString
 from paritea.diagram import Diagram
+from paritea.glue.pyzx import from_pyzx, to_pyzx
 from paritea.web import compute_pauli_webs
 
-from paritea_ui.core import GENERATORS, build_diagram, diagram_summary, is_rust_panic
-from paritea_ui.layout import node_positions
+from paritea_ui import codegen
+from paritea_ui.core import GENERATORS, build_diagram, is_rust_panic
+from paritea_ui.examples import EXAMPLES
+from paritea_ui.layout import UNSET, node_positions, place_unpositioned
+from paritea_ui.session import SHELF, Entry
+from paritea_ui.validate import UserError, diagram_problems, require_valid
 
-# Python that builds each generator's diagram, shown on the page so a result can be reproduced outside the browser.
-_BUILD_CODE: dict[str, tuple[str, str]] = {
-    "Rotated surface code memory experiment": (
-        "from paritea.generate import surface_code_memory_experiment",
-        "diagram = surface_code_memory_experiment(distance={distance}, rounds={rounds})",
-    ),
-    "Steane code, Shor syndrome extraction": (
-        "from paritea.generate import shor_extraction, steane_code_stabilisers",
-        "diagram = shor_extraction(steane_code_stabilisers(), qubits=7, repeat={rounds})",
-    ),
-    "Z-web grid": (
-        "from paritea.generate import zweb\nfrom paritea.glue.pyzx import from_pyzx",
-        "diagram = from_pyzx(zweb({qubits}, {depth}), positions=True)",
-    ),
-}
+MAX_IMPORT_CHARS = 5_000_000
 
 
 def info() -> dict[str, str]:
@@ -41,7 +35,7 @@ def info() -> dict[str, str]:
 
 
 def generators() -> list[dict[str, Any]]:
-    """The diagram generators and their integer parameters, for building the input form."""
+    """The diagram generators and their integer parameters, for building input forms."""
     return [
         {
             "name": name,
@@ -53,6 +47,7 @@ def generators() -> list[dict[str, Any]]:
                     "default": p.default,
                     "min": p.min_value,
                     "max": p.max_value,
+                    "step": p.step,
                     "help": p.help,
                 }
                 for key, p in generator.params.items()
@@ -62,13 +57,57 @@ def generators() -> list[dict[str, Any]]:
     ]
 
 
+def examples() -> list[dict[str, Any]]:
+    """The ready-made diagrams and the numbers of webs paritea finds in them."""
+    return [
+        {
+            "id": key,
+            "title": e.title,
+            "description": e.description,
+            "stabilising_webs": e.stabilising_webs,
+            "detecting_regions": e.detecting_regions,
+        }
+        for key, e in EXAMPLES.items()
+    ]
+
+
+# ---------------------------------------------------------------- Serialisation
+
+
+def summary(d: Diagram) -> dict[str, int]:
+    """Headline numbers describing a diagram."""
+    try:
+        inputs, outputs = d.io()
+    except ValueError:
+        inputs, outputs = [], []
+    types = Counter(str(d.type(n)) for n in d.node_indices())
+    return {
+        "Nodes": d.num_nodes(),
+        "Edges": d.num_edges(),
+        "Inputs": len(inputs),
+        "Outputs": len(outputs),
+        "Z spiders": types["Z"],
+        "X spiders": types["X"],
+        "H boxes": types["H"],
+    }
+
+
 def diagram_json(d: Diagram) -> dict[str, Any]:
     """Everything needed to draw a diagram: typed nodes with positions and phases, edges as [index, source, target]."""
     positions = node_positions(d)
-    inputs, outputs = d.io()
+    try:
+        inputs, outputs = d.io()
+    except ValueError:
+        inputs, outputs = [], []
     return {
         "nodes": [
-            {"id": n, "type": str(d.type(n)), "phase": str(d.phase(n)), "x": positions[n][0], "y": positions[n][1]}
+            {
+                "id": n,
+                "type": str(d.type(n)),
+                "phase": str(d.phase(n)),
+                "x": round(positions[n][0], 3),
+                "y": round(positions[n][1], 3),
+            }
             for n in d.node_indices()
         ],
         "edges": [[e, *d.get_edge_endpoints_by_index(e)] for e in d.edge_indices()],
@@ -82,52 +121,249 @@ def web_json(web: PauliString) -> list[tuple[int, str]]:
     return [(edge, str(pauli)) for edge, pauli in sorted(web.items())]
 
 
-def python_code(generator: str, params: dict[str, int]) -> str:
-    """Stand-alone Python that reproduces a Pauli-webs result."""
-    imports, build = _BUILD_CODE[generator]
-    return (
-        f"{imports}\nfrom paritea.web import compute_pauli_webs\n\n"
-        f"{build.format(**params)}\n"
-        "stabilising_webs, detecting_regions = compute_pauli_webs(diagram)\n"
-        "print(len(stabilising_webs), len(detecting_regions))\n"
-    )
-
-
-def pauli_webs(generator: str, params: dict[str, int]) -> dict[str, Any]:
-    """Build a diagram with a generator and compute its stabilising webs and detecting regions."""
-    spec = GENERATORS[generator]
-    for key, p in spec.params.items():
-        value = params.get(key)
-        if not isinstance(value, int) or not p.min_value <= value <= p.max_value:
-            raise ValueError(f"{p.label} must be a whole number from {p.min_value} to {p.max_value}.")
-
-    start = time.perf_counter()
-    d = build_diagram(generator, **params)
-    built = time.perf_counter()
-    stabilisers, regions = compute_pauli_webs(d)
-    done = time.perf_counter()
+def entry_json(entry: Entry) -> dict[str, Any]:
+    """A shelf entry for the page: its drawing, summary, problems and the Python that rebuilds it."""
     return {
-        "generator": generator,
-        "params": params,
-        "diagram": diagram_json(d),
-        "summary": diagram_summary(d),
-        "stabilisers": [web_json(w) for w in stabilisers],
-        "regions": [web_json(w) for w in regions],
-        "seconds": {"build": built - start, "webs": done - built},
-        "code": python_code(generator, params),
+        "id": entry.id,
+        "name": entry.name,
+        "source": entry.source,
+        "summary": summary(entry.diagram),
+        "problems": diagram_problems(entry.diagram),
+        "notes": entry.notes,
+        "code": entry.code,
+        "diagram": diagram_json(entry.diagram),
     }
 
 
-OPS: dict[str, Callable[..., Any]] = {"info": info, "generators": generators, "pauli_webs": pauli_webs}
+# ---------------------------------------------------------------- Diagrams
+
+
+def _check_params(generator: str, params: dict[str, int]) -> None:
+    if generator not in GENERATORS:
+        raise UserError(f"Unknown diagram generator: {generator}.")
+    for key, p in GENERATORS[generator].params.items():
+        value = params.get(key)
+        if not isinstance(value, int) or not p.min_value <= value <= p.max_value:
+            raise UserError(f"{p.label} must be a whole number from {p.min_value} to {p.max_value}.")
+        if (value - p.min_value) % p.step:
+            raise UserError(f"{p.label} must be one of {list(range(p.min_value, p.max_value + 1, p.step))}.")
+
+
+def _short_name(generator: str, params: dict[str, int]) -> str:
+    values = ", ".join(f"{GENERATORS[generator].params[k].label.split()[0].lower()} {v}" for k, v in params.items())
+    return f"{generator} ({values})"
+
+
+def diagram_generate(generator: str, params: dict[str, int]) -> dict[str, Any]:
+    """Build a diagram with a generator and put it on the shelf (the same recipe twice gives the same entry)."""
+    _check_params(generator, params)
+    key = "generate|" + generator + "|" + json.dumps(params, sort_keys=True)
+    entry = SHELF.find(key)
+    if entry is None:
+        d = place_unpositioned(build_diagram(generator, **params))
+        entry = SHELF.add(
+            d,
+            name=_short_name(generator, params),
+            source={"kind": "generator", "generator": generator, "params": params},
+            code=codegen.generator_code(generator, params),
+            key=key,
+        )
+    return entry_json(entry)
+
+
+def diagram_example(example: str) -> dict[str, Any]:
+    """Put one of the ready-made diagrams on the shelf."""
+    if example not in EXAMPLES:
+        raise UserError(f"Unknown example: {example}.")
+    key = "example|" + example
+    entry = SHELF.find(key)
+    if entry is None:
+        e = EXAMPLES[example]
+        entry = SHELF.add(
+            place_unpositioned(e.build()),
+            name=e.title,
+            source={"kind": "example", "example": example},
+            code=codegen.example_code(example),
+            key=key,
+        )
+    return entry_json(entry)
+
+
+def _detect_format(text: str, filename: str) -> str:
+    name = filename.lower()
+    if name.endswith((".json", ".zxg", ".qgraph")):
+        return "pyzx"
+    if name.endswith(".qasm"):
+        return "qasm"
+    start = text.lstrip()[:300]
+    if start.startswith("{"):
+        return "pyzx"
+    if "OPENQASM" in start.upper():
+        return "qasm"
+    raise UserError("Couldn't tell the file's format. Choose PyZX JSON or OpenQASM 2 under Format.")
+
+
+def _read_graph(text: str, fmt: str) -> zx.graph.base.BaseGraph:
+    try:
+        if fmt == "pyzx":
+            return zx.Graph.from_json(text)
+        return zx.Circuit.from_qasm(text).to_graph()
+    except Exception as exc:
+        kind = "PyZX JSON" if fmt == "pyzx" else "OpenQASM 2"
+        raise UserError(f"This doesn't read as {kind}: {exc}") from exc
+
+
+def _from_pyzx(graph: zx.graph.base.BaseGraph, *, convert_hadamard: bool, keep_positions: bool) -> Diagram:
+    try:
+        return from_pyzx(graph, convert_had_edges=convert_hadamard, positions=keep_positions)
+    except ValueError as exc:
+        message = str(exc)
+        if "phase" in message:
+            message += ". paritea supports Clifford diagrams only: phases must be multiples of π/2."
+        elif "HADAMARD" in message:
+            message = "the file has Hadamard edges; tick 'Convert Hadamard edges to H boxes'."
+        else:
+            message += ". Try setting 'Inputs and outputs' to 'Every boundary is an output'."
+        raise UserError(f"paritea can't read this diagram: {message}") from exc
+
+
+def diagram_import(
+    text: str,
+    filename: str = "",
+    fmt: str = "auto",
+    *,
+    convert_hadamard: bool = True,
+    keep_positions: bool = True,
+    io: str = "file",
+) -> dict[str, Any]:
+    """Read a PyZX/ZXLive JSON file or an OpenQASM 2 circuit and put the diagram on the shelf.
+
+    ``io`` says where inputs and outputs come from: ``file`` (the file's lists; all boundaries become outputs if it has
+    none), ``detect`` (from positions: a boundary left of its neighbour is an input) or ``outputs`` (every boundary).
+    """
+    if not text.strip():
+        raise UserError("The file is empty.")
+    if len(text) > MAX_IMPORT_CHARS:
+        raise UserError("The file is larger than 5 MB.")
+    fmt = _detect_format(text, filename) if fmt == "auto" else fmt
+    graph = _read_graph(text, fmt)
+    notes = []
+    if io == "detect":
+        try:
+            graph.auto_detect_io()
+        except TypeError as exc:
+            raise UserError(f"Couldn't tell inputs from outputs by position: {exc}") from exc
+    elif io == "outputs" or not (graph.inputs() or graph.outputs()):
+        graph.set_inputs(())
+        graph.set_outputs(())
+        notes.append("Every boundary is treated as an output, in the order of their vertex numbers.")
+    d = _from_pyzx(graph, convert_hadamard=convert_hadamard, keep_positions=keep_positions)
+    for n in d.node_indices():  # unusable coordinates (e.g. NaN) mean "no position"
+        if not (math.isfinite(d.x(n)) and math.isfinite(d.y(n))):
+            d.set_x(n, UNSET).set_y(n, UNSET)
+    place_unpositioned(d)
+    inputs, outputs = d.io()
+    filename = filename or ("pasted.json" if fmt == "pyzx" else "pasted.qasm")
+    entry = SHELF.add(
+        d,
+        name=filename,
+        source={"kind": "import", "format": fmt, "filename": filename},
+        code=codegen.import_code(
+            filename=filename,
+            fmt=fmt,
+            convert_hadamard=convert_hadamard,
+            keep_positions=keep_positions,
+            io=io,
+            inputs=list(inputs),
+            outputs=list(outputs),
+        ),
+        notes=notes,
+    )
+    return entry_json(entry)
+
+
+def diagram_get(diagram: str) -> dict[str, Any]:
+    return entry_json(SHELF.get(diagram))
+
+
+def diagram_remove(diagram: str) -> dict[str, str]:
+    SHELF.remove(diagram)
+    return {"removed": diagram}
+
+
+def diagram_export(diagram: str, fmt: str) -> dict[str, str]:
+    """The diagram as a PyZX JSON file (opens in ZXLive) or as TikZ."""
+    entry = SHELF.get(diagram)
+    d = entry.diagram
+    g, mapping = to_pyzx(d, with_mapping=True)
+    inputs, outputs = d.io()
+    g.set_inputs(tuple(mapping[n] for n in inputs))
+    g.set_outputs(tuple(mapping[n] for n in outputs))
+    stem = "".join(c if c.isalnum() else "-" for c in entry.name.lower()).strip("-")[:60] or entry.id.lower()
+    if fmt == "tikz":
+        return {"filename": f"{stem}.tikz", "text": g.to_tikz()}
+    return {"filename": f"{stem}.json", "text": g.to_json()}
+
+
+# ---------------------------------------------------------------- Pauli webs
+
+
+def webs(diagram: str) -> dict[str, Any]:
+    """Stabilising webs and detecting regions of a diagram on the shelf."""
+    entry = SHELF.get(diagram)
+    require_valid(entry.diagram)
+    start = time.perf_counter()
+    stabilisers, regions = compute_pauli_webs(entry.diagram)
+    seconds = time.perf_counter() - start
+    return {
+        **entry_json(entry),
+        "stabilisers": [web_json(w) for w in stabilisers],
+        "regions": [web_json(w) for w in regions],
+        "seconds": {"webs": seconds},
+        "code": codegen.webs_code(entry.code),
+    }
+
+
+def pauli_webs(generator: str, params: dict[str, int]) -> dict[str, Any]:
+    """Build a diagram with a generator (it goes on the shelf) and compute its Pauli webs."""
+    start = time.perf_counter()
+    built = diagram_generate(generator, params)
+    result = webs(built["id"])
+    result["seconds"]["build"] = time.perf_counter() - start - result["seconds"]["webs"]
+    return {**result, "generator": generator, "params": params}
+
+
+OPS: dict[str, Callable[..., Any]] = {
+    "info": info,
+    "generators": generators,
+    "examples": examples,
+    "diagram_generate": diagram_generate,
+    "diagram_example": diagram_example,
+    "diagram_import": diagram_import,
+    "diagram_get": diagram_get,
+    "diagram_remove": diagram_remove,
+    "diagram_export": diagram_export,
+    "webs": webs,
+    "pauli_webs": pauli_webs,
+}
+
+
+def _run(op: str, args_json: str) -> Any:
+    if op not in OPS:
+        raise UserError(f"Unknown operation: {op}.")
+    return OPS[op](**json.loads(args_json))
 
 
 def dispatch(op: str, args_json: str) -> str:
     """Run one operation and return ``{"ok": true, "result": ...}`` or ``{"ok": false, "error": ...}`` as JSON."""
     try:
-        result = OPS[op](**json.loads(args_json))
+        return json.dumps({"ok": True, "result": _run(op, args_json)}, allow_nan=False)
     except BaseException as exc:  # Rust panics derive from BaseException
         if not isinstance(exc, Exception) and not is_rust_panic(exc):
             raise
-        error = {"type": type(exc).__name__, "message": str(exc), "traceback": traceback.format_exc()}
+        error = {"type": type(exc).__name__, "message": str(exc) or type(exc).__name__}
+        if is_rust_panic(exc):
+            error["message"] = f"paritea's Rust core stopped with an internal error: {exc}"
+        if not isinstance(exc, UserError):
+            error["traceback"] = traceback.format_exc()
         return json.dumps({"ok": False, "error": error})
-    return json.dumps({"ok": True, "result": result})

@@ -11,7 +11,7 @@ from pathlib import Path
 APP = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(APP))
 
-from paritea_ui.api import generators, pauli_webs  # noqa: E402
+from paritea_ui.api import examples, generators, pauli_webs  # noqa: E402
 
 EXAMPLES = [
     ("Rotated surface code memory experiment", {"distance": 3, "rounds": 1}),
@@ -38,4 +38,5 @@ if __name__ == "__main__":
         (out / name).write_text(json.dumps(result))
         index[key(generator, params)] = name
         print(f"{key(generator, params)}: {len(result['stabilisers'])} webs, {len(result['regions'])} regions")
-    (out / "index.json").write_text(json.dumps({"generators": generators(), "results": index}, indent=2) + "\n")
+    catalogue = {"generators": generators(), "examples": examples(), "results": index}
+    (out / "index.json").write_text(json.dumps(catalogue, indent=2) + "\n")

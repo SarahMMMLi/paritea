@@ -204,7 +204,7 @@ kbd { font-family: var(--mono); font-size: 12px; border: 1px solid var(--border-
 .where::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
 .where.preview { color: var(--warn); }
 
-.stats { display: grid; grid-template-columns: repeat(6, 1fr); gap: 10px; margin: 16px 0; }
+.stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(112px, 1fr)); gap: 10px; margin: 16px 0; }
 .stat { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 10px 12px; }
 .stat-label { font-size: 12px; color: var(--text-3); font-weight: 600; }
 .stat-value { font-size: 20px; font-weight: 700; font-variant-numeric: tabular-nums; }
@@ -282,3 +282,43 @@ pre.code { margin: 0; padding: 14px; font-size: 13px; line-height: 1.6; overflow
   svg.diagram { height: 380px; }
   .engine-label { max-width: 46vw; overflow: hidden; text-overflow: ellipsis; }
 }
+
+/* Diagrams tool and shelf */
+.muted { color: var(--text-3); font-weight: 400; }
+.tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--border); margin: -4px 0 18px; }
+.tabs button { font: inherit; font-weight: 600; font-size: 14px; color: var(--text-2); background: none; border: 0;
+  border-bottom: 2px solid transparent; padding: 8px 12px 10px; cursor: pointer; margin-bottom: -1px; }
+.tabs button:hover { color: var(--text); }
+.tabs button[aria-selected="true"] { color: var(--accent-text); border-bottom-color: var(--accent); }
+.tab-form .actions { margin-top: 18px; }
+.param-help { font-size: 12px; color: var(--text-3); max-width: 160px; }
+.example-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 12px; }
+.example-card { border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 14px; display: flex; flex-direction: column; gap: 6px; }
+.example-card h3 { font-size: 15px; }
+.example-card p { margin: 0; font-size: 13px; color: var(--text-2); }
+.example-card .known { color: var(--accent-text); font-weight: 500; }
+.example-card .btn { align-self: flex-start; margin-top: auto; }
+.file-row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 10px; font-size: 14px; }
+textarea { width: 100%; font: 13px/1.5 var(--mono); color: var(--text); background: var(--surface); border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm); padding: 10px 12px; resize: vertical; }
+textarea:focus { outline: 2px solid color-mix(in srgb, var(--accent) 40%, transparent); outline-offset: 1px; border-color: var(--accent); }
+.option-grid { display: flex; gap: 16px; flex-wrap: wrap; margin: 14px 0 8px; }
+.option-grid .param { font-size: 13px; font-weight: 600; color: var(--text-2); gap: 6px; }
+.check { display: flex; align-items: center; gap: 8px; font-size: 14px; margin-top: 8px; }
+.check input { width: 16px; height: 16px; accent-color: var(--accent); }
+.alert ul { margin: 6px 0 0; padding-left: 20px; }
+.io-line { font-size: 13px; color: var(--text-2); margin: 10px 2px 0; }
+.next-steps { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin: 16px 0; }
+.download-label { margin-left: auto; font-size: 13px; color: var(--text-3); font-weight: 600; }
+.results .code-card { margin-top: 0; }
+.shelf-section { margin-top: 40px; }
+.shelf-list { list-style: none; margin: 0; padding: 0; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); }
+.shelf-list li { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 14px; flex-wrap: wrap; }
+.shelf-list li + li { border-top: 1px solid var(--border); }
+.shelf-name { font-size: 14px; min-width: 0; }
+.shelf-id { display: inline-block; font: 600 12px var(--mono); color: var(--accent-text); background: var(--accent-weak);
+  border-radius: 6px; padding: 1px 6px; margin-right: 4px; }
+.row-actions { display: flex; gap: 6px; }
+.source-body { margin-top: 12px; }
+.source-body select { width: min(100%, 520px); }
+.hero-actions .btn-ghost { background: var(--surface); }

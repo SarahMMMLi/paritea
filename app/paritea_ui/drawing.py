@@ -4,12 +4,13 @@
 with ``Figure()`` rather than pyplot, which keeps them out of pyplot's global state and needs no GUI backend.
 """
 
-import rustworkx as rx
 from matplotlib.collections import LineCollection
 from matplotlib.figure import Figure
 from matplotlib.lines import Line2D
 from paritea import Pauli, PauliString
 from paritea.diagram import Diagram, NodeType
+
+from paritea_ui.layout import node_positions
 
 # Colours follow pyzx's defaults so diagrams look the same as in the notebooks.
 NODE_STYLES: dict[NodeType, dict] = {
@@ -19,19 +20,6 @@ NODE_STYLES: dict[NodeType, dict] = {
     NodeType.B: {"c": "#000000", "marker": "o", "s": 15},
 }
 PAULI_COLORS: dict[Pauli, str] = {Pauli.X: "#d62728", Pauli.Z: "#2ca02c", Pauli.Y: "#1f77b4"}
-
-
-def node_positions(d: Diagram) -> dict[int, tuple[float, float]]:
-    """Node positions from the diagram, or a spring layout if some node has no position."""
-    nodes = list(d.node_indices())
-    if all(d.x(n) != -1 and d.y(n) != -1 for n in nodes):
-        return {n: (float(d.x(n)), float(d.y(n))) for n in nodes}
-
-    g = rx.PyGraph()
-    idx = {n: g.add_node(n) for n in nodes}
-    g.add_edges_from_no_data([(idx[s], idx[t]) for s, t in d.edge_list()])
-    layout = rx.spring_layout(g, seed=0)
-    return {n: (float(layout[idx[n]][0]), float(layout[idx[n]][1])) for n in nodes}
 
 
 def draw_diagram(d: Diagram, *, web: PauliString | None = None, show_phases: bool = False) -> Figure:
