@@ -7,6 +7,7 @@ on:
       - 'app/**'
       - 'src/**'
       - 'rust/**'
+      - 'tests/**'
       - 'pyproject.toml'
       - 'Cargo.toml'
       - 'Cargo.lock'
@@ -42,3 +43,6 @@ jobs:
 
       - name: Run tests
         run: uv run pytest
+
+      - name: Run paritea's tests with the browser's stand-ins for galois and recordclass
+        run: uv run python build/test_with_stand_ins.py

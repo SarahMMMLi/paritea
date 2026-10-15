@@ -12,6 +12,7 @@ https://sarahmmmli.github.io/paritea/ on every push to `main`.
 ```shell
 uv sync                                        # create app/.venv; builds paritea (Rust) from .. in editable mode
 uv run pytest                                  # the Python the page runs, tested natively (a few seconds)
+uv run python build/test_with_stand_ins.py     # paritea's own tests, real galois/recordclass vs the stand-ins (~3 min)
 uv run ruff check --fix . && uv run ruff format .
 
 ./build/build_wheels.sh                        # browser wheels -> web/wheels/ (toolchains cached in ~/.cache/paritea-web)
@@ -46,7 +47,7 @@ anything it calls, also run the browser check.
 | `paritea_ui/examples.py`, `codegen.py` | Ready-made diagrams with their known answers; the Python shown under every result |
 | `paritea_ui/console.py` | The Python console's namespace and runner |
 | `paritea_ui/compat/` | Stand-ins for galois (`GF2`), recordclass, an `mpl_toolkits` import, stim/sinter imports and `scipy.stats`; used only when the real package is absent |
-| `build/` | `build_wheels.sh` (+ `patches/`), `precompute.py`, `build_site.py`, `check_site.py` (headless-browser check: in-browser results match the native ones, links, axe-core, phone width) |
+| `build/` | `build_wheels.sh` (+ `patches/`), `precompute.py`, `build_site.py`, `test_with_stand_ins.py` (paritea's tests must give the same outcomes with the stand-ins as with galois and recordclass), `check_site.py` (headless-browser check: in-browser results match the native ones, links, axe-core, phone width) |
 | `tests/` | `test_api.py` (every operation, with known answers), `test_core.py` (generators, layout), `test_compat.py` (stand-ins vs the real galois) |
 
 ## Conventions
@@ -144,5 +145,7 @@ Worked examples: `../demo/*.ipynb`, `../tests/**`, `../benchmarks/`.
 - `from_pyzx` defaults: Hadamard edges raise (`convert_had_edges=True` converts them) and positions are dropped
   (`positions=True` keeps them). `to_diagram`/`to_noise_model` use those defaults and discard stim's noise.
 - `export_to_stim_dem` numbers detectors after the logicals, so its detector ids differ from stim's.
+- The app (and so the page) runs pyzx 0.10.7, while the library's own lock pins 0.9.0. Two of paritea's tests use
+  `zx.basicrules`, which pyzx 0.10 removed, so they fail in the app's environment with or without the stand-ins.
 - Natively, the Rust extension is built unoptimised (`profile = "dev-py"` upstream), so heavy computations run slower
   in the tests than on the page, whose wheel uses the optimised `release` profile.
