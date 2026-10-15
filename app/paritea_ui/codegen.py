@@ -145,6 +145,17 @@ def webs_code(diagram_code: str) -> str:
     )
 
 
+def propagation_code(noise_code: str) -> str:
+    code = _with_import(noise_code, "from paritea import build_flip_operators, push_out")
+    return code + (
+        "\nflip_operators = build_flip_operators(diagram)\n"
+        "pushed_out = push_out(noise_model, flip_operators)\n"
+        "for fault, weights in pushed_out.atomic_faults_with_values():\n"
+        "    boundary = {edge: str(pauli) for edge, pauli in fault.edge_flips.items()}\n"
+        "    print(boundary, sorted(fault.detector_flips), weights)\n"
+    )
+
+
 def noise_code(diagram_code: str, *, weights: dict[str, int], noise_free: list[tuple[int, int]]) -> str:
     code = _with_import(diagram_code, "from paritea.noise import NoiseModel")
     if noise_free:

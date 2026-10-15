@@ -336,3 +336,13 @@ svg.diagram.pickable .edge:has(+ .hit:hover) { stroke: var(--accent); stroke-wid
 .step + .step { margin-top: 22px; padding-top: 18px; border-top: 1px solid var(--border); }
 .canvas-small svg.diagram { height: 380px; }
 .truncated { font-size: 12px; color: var(--text-3); padding: 8px 14px; }
+
+/* Fault propagation */
+.kind { display: inline-block; font-size: 12px; font-weight: 600; padding: 2px 8px; border-radius: 999px; white-space: nowrap; }
+.kind.detected { background: var(--ok-weak); color: var(--ok); }
+.kind.boundary { background: var(--warn-weak); color: var(--warn); }
+.kind.none { background: var(--surface-2); color: var(--text-3); }
+.card-note { margin: 0; padding: 10px 14px; font-size: 13px; color: var(--text-2); border-bottom: 1px solid var(--border); }
+.nowrap { white-space: nowrap; display: inline-flex; align-items: center; gap: 4px; margin-right: 8px; }
+.table-wrap.tall { max-height: 440px; }
+.results > .card { margin-bottom: 16px; }

@@ -233,6 +233,7 @@ function showResult(noise) {
     </div>
     ${noise.notes.map(noticeHtml).join("")}
     ${statsHtml(s)}
+    <div class="next-steps"><a class="btn btn-primary" href="#/propagation?noise=${noise.id}&run=1">Propagate these faults →</a></div>
     <div class="below">
       <section class="card">
         <div class="card-head"><h3>Faults (${s.Faults})</h3>

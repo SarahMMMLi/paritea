@@ -14,7 +14,7 @@ from collections.abc import Callable
 from typing import Any
 
 import pyzx as zx
-from paritea import PauliString
+from paritea import PauliString, build_flip_operators, push_out
 from paritea.diagram import Diagram
 from paritea.glue.pyzx import from_pyzx, to_pyzx
 from paritea.noise import NoiseModel
@@ -388,6 +388,68 @@ def noise_remove(noise: str) -> dict[str, str]:
     return {"removed": noise}
 
 
+# ---------------------------------------------------------------- Fault propagation
+
+KINDS = ["detected", "boundary", "none"]
+
+
+def _boundary_labels(d: Diagram) -> dict[int, str]:
+    """Names for boundary edges: 'in 0', 'out 3', ... (the edge next to that input or output)."""
+    labels = {}
+    inputs, outputs = d.io()
+    for prefix, nodes in (("in", inputs), ("out", outputs)):
+        for i, node in enumerate(nodes):
+            for edge in d.incident_edges(node):
+                labels[edge] = f"{prefix} {i}"
+    return labels
+
+
+def propagation(noise: str) -> dict[str, Any]:
+    """Where every fault of a noise model ends up: Paulis on the boundary and the detecting regions it flips."""
+    entry_noise = SHELF.get_noise(noise)
+    entry = SHELF.get(entry_noise.diagram_id)
+    d = entry.diagram
+    require_valid(d)
+    start = time.perf_counter()
+    try:
+        flip_ops = build_flip_operators(d)
+    except AssertionError as exc:
+        raise UserError(
+            "paritea can't push faults out of this diagram: one of its stabilisers has no support on the boundary."
+        ) from exc
+    pushed = push_out(entry_noise.model, flip_ops)
+    seconds = time.perf_counter() - start
+
+    effects = []
+    for fault, values in pushed.atomic_faults_with_values():
+        boundary = [(edge, str(pauli)) for edge, pauli in sorted(fault.edge_flips.items())]
+        detectors = sorted(fault.detector_flips)
+        kind = "detected" if detectors else ("boundary" if boundary else "none")
+        effects.append(
+            {"kind": kind, "boundary": boundary, "regions": detectors, "faults": len(values), "min_weight": min(values)}
+        )
+    effects.sort(key=lambda e: (KINDS.index(e["kind"]), e["min_weight"], -e["faults"], e["regions"], e["boundary"]))
+    counts = {kind: sum(e["faults"] for e in effects if e["kind"] == kind) for kind in KINDS}
+    labels = _boundary_labels(d)
+    return {
+        "noise": {"id": entry_noise.id, "name": entry_noise.name},
+        "diagram": {"id": entry.id, "name": entry.name},
+        "summary": {
+            "Faults": entry_noise.model.num_faults(),
+            "Distinct effects": len(effects),
+            "Detected": counts["detected"],
+            "Undetected": counts["boundary"],
+            "No effect": counts["none"],
+        },
+        "effects": effects,
+        "labels": {str(edge): label for edge, label in labels.items()},
+        "flip_operators": [[(edge, str(pauli)) for edge, pauli in sorted(op.items())] for op in flip_ops.stab_flip_ops],
+        "regions": len(flip_ops.region_gen_set),
+        "seconds": seconds,
+        "code": codegen.propagation_code(entry_noise.code),
+    }
+
+
 # ---------------------------------------------------------------- Pauli webs
 
 
@@ -429,6 +491,7 @@ OPS: dict[str, Callable[..., Any]] = {
     "noise_model": noise_model,
     "noise_get": noise_get,
     "noise_remove": noise_remove,
+    "propagation": propagation,
     "webs": webs,
     "pauli_webs": pauli_webs,
 }

@@ -179,6 +179,21 @@ def check_noise(page) -> list[str]:
     return failures
 
 
+def check_propagation(page) -> list[str]:
+    """The Steane preparation circuit with unit noise on every edge, pushed out."""
+    page.goto(URL + "#/propagation")
+    page.evaluate("window.lastPropagation = null")
+    page.click("#use-demo")
+    page.wait_for_function("window.lastPropagation !== null", timeout=120_000)
+    s = page.evaluate("window.lastPropagation.summary")
+    got = (s["Faults"], s["Distinct effects"], s["Detected"], s["Undetected"], s["No effect"])
+    expected = (123, 44, 54, 60, 9)  # paritea natively, see tests/test_api.py
+    page.screenshot(path=SHOTS / "9-propagation.png", full_page=True)
+    ok = got == expected
+    print(f"{'OK  ' if ok else 'FAIL'} Propagation: Steane circuit {got} (expected {expected})")
+    return [] if ok else [f"propagation {got} != {expected}"]
+
+
 def main() -> int:
     failures = []
     with sync_playwright() as p:
@@ -216,6 +231,7 @@ def main() -> int:
 
         failures += check_diagrams(page)
         failures += check_noise(page)
+        failures += check_propagation(page)
 
         # Show a detecting region on the first example for a screenshot.
         page.goto(URL + "#/webs")

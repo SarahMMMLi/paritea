@@ -4,6 +4,7 @@ import { Engine } from "./engine.js";
 import { renderDiagrams } from "./tools/diagrams.js";
 import { renderHome } from "./tools/home.js";
 import { renderNoise } from "./tools/noise.js";
+import { renderPropagation } from "./tools/propagation.js";
 import { renderWebs } from "./tools/webs.js";
 
 const app = document.getElementById("app");
@@ -54,6 +55,7 @@ const ROUTES = {
   "": [renderHome, "paritea in your browser"],
   diagrams: [renderDiagrams, "Diagrams · paritea"],
   noise: [renderNoise, "Noise model · paritea"],
+  propagation: [renderPropagation, "Fault propagation · paritea"],
   webs: [renderWebs, "Pauli webs · paritea"],
 };
 

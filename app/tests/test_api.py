@@ -229,3 +229,37 @@ def test_noise_python_reproduces_the_noise_model(make: str, args: dict, tmp_path
     assert sorted(d.get_edge_endpoints_by_index(e) for e in namespace["noise_free"]) == sorted(
         endpoints[e] for e in free
     )
+
+
+@pytest.mark.parametrize(
+    ("example", "free", "expected"),
+    [
+        # (faults, distinct effects, detected, undetected, no effect), worked out natively with paritea
+        ("steane-state", "X", (21, 21, 0, 21, 0)),
+        ("steane-circuit", None, (123, 44, 54, 60, 9)),
+        ("ring-6", None, (36, 25, 12, 24, 0)),
+    ],
+)
+def test_fault_propagation_known_answers(example: str, free: str | None, expected: tuple) -> None:
+    entry = call("diagram_example", example=example)
+    noise_free = _wires_touching(entry, free) if free else []
+    noise = call("noise_model", diagram=entry["id"], weights={"x": 1, "y": 1, "z": 1}, noise_free=noise_free)
+
+    result = call("propagation", noise=noise["id"])
+
+    s = result["summary"]
+    assert (s["Faults"], s["Distinct effects"], s["Detected"], s["Undetected"], s["No effect"]) == expected
+    assert sum(e["faults"] for e in result["effects"]) == s["Faults"]
+    labelled = {int(edge) for edge in result["labels"]}
+    assert all(edge in labelled for e in result["effects"] for edge, _ in e["boundary"])
+
+
+def test_fault_propagation_python_reproduces_the_effects() -> None:
+    entry = call("diagram_example", example="steane-circuit")
+    noise = call("noise_model", diagram=entry["id"], weights={"x": 1, "y": 1, "z": 1}, noise_free=[])
+    result = call("propagation", noise=noise["id"])
+    namespace: dict = {}
+
+    exec(result["code"].replace("print(", "(lambda *a: None)("), namespace)  # noqa: S102
+
+    assert len(list(namespace["pushed_out"].atomic_faults())) == result["summary"]["Distinct effects"]
