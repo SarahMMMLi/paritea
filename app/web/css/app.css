@@ -377,3 +377,8 @@ svg.diagram.pickable .edge:has(+ .hit:hover) { stroke: var(--accent); stroke-wid
 .first-difference { margin: 8px 0 0; font-size: 14px; }
 .card-note.plain-pad { border: 0; }
 #cancel[hidden] { display: none; }
+
+/* stim → DEM */
+.verdict-title { font-size: 17px; }
+pre.dem-text { max-height: 360px; font-size: 12px; }
+.results > .verdict { margin-bottom: 12px; }

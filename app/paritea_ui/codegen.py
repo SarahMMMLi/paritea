@@ -176,6 +176,69 @@ def semantic_code(code_a: str, code_b: str) -> str:
     )
 
 
+def stim_circuit_code(preset: dict | None, filename: str) -> str:
+    """The lines that make ``circuit``: stim's generator for a preset, or the user's file."""
+    if preset:
+        p = preset["p"]
+        return (
+            "circuit = stim.Circuit.generated(\n"
+            f'    "surface_code:rotated_memory_z", distance={preset["distance"]}, rounds={preset["rounds"]},\n'
+            f"    after_clifford_depolarization={p}, after_reset_flip_probability={p},\n"
+            f"    before_measure_flip_probability={p}, before_round_data_depolarization={p},\n"
+            ")\n"
+        )
+    return f"circuit = stim.Circuit.from_file({filename!r})  # the circuit you used on the page\n"
+
+
+def stim_diagram_code(preset: dict | None, filename: str) -> str:
+    return (
+        "import stim\nfrom paritea.glue.stim import from_stim\n\n"
+        + stim_circuit_code(preset, filename)
+        + "diagram = from_stim(circuit.flattened())[0]\n"
+    )
+
+
+def stim_dem_code(preset: dict | None, filename: str) -> str:
+    return (
+        "import stim\n"
+        "from paritea.glue.stim import export_to_stim_dem, from_stim, push_out_for_measurement_detectors\n\n"
+        + stim_circuit_code(preset, filename)
+        + "circuit = circuit.flattened()\n"
+        "diagram, noise_model, measurement_nodes, observables, detectors = from_stim(circuit)\n"
+        "pushed_out, logical_regions, detector_regions = push_out_for_measurement_detectors(\n"
+        "    noise_model,\n"
+        "    measurement_nodes=measurement_nodes,\n"
+        "    logicals=[observables[k] for k in sorted(observables)],\n"
+        "    detectors=detectors,\n"
+        ")\n"
+        "pushed_out.compress(lambda x, y: x * (1 - y) + (1 - x) * y)  # combine the probabilities of identical faults\n"
+        "dem = export_to_stim_dem(pushed_out, logical_regions=logical_regions, detector_regions=detector_regions)\n"
+        "print(dem)\n"
+    )
+
+
+def sinter_code(dem_code: str) -> str:
+    """The demo's sampling comparison: needs many shots and several processes, so it runs on your computer."""
+    body = dem_code.replace("print(dem)\n", "")
+    return (
+        _with_import(_with_import(body, "import sinter"), "from paritea.glue.stim import wrap_dem_as_sinter_task")
+        + "\n# Sample both and decode with PyMatching (pip install sinter pymatching); the rates should agree.\n"
+        'if __name__ == "__main__":\n'
+        "    stats = sinter.collect(\n"
+        "        num_workers=8,\n"
+        "        tasks=[\n"
+        '            sinter.Task(circuit=circuit, json_metadata={"name": "stim"}),\n'
+        '            wrap_dem_as_sinter_task(dem, json_metadata={"name": "paritea"}),\n'
+        "        ],\n"
+        "        max_shots=10_000_000,\n"
+        "        max_errors=1_000,\n"
+        '        decoders=["pymatching"],\n'
+        "    )\n"
+        "    for s in stats:\n"
+        '        print(s.json_metadata["name"], "logical error rate:", s.errors / s.shots)\n'
+    )
+
+
 def propagation_code(noise_code: str) -> str:
     code = _with_import(noise_code, "from paritea import build_flip_operators, push_out")
     return code + (

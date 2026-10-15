@@ -596,6 +596,147 @@ def fault_equivalence(a: str, b: str, max_weight: int | None = None, *, smallest
     }
 
 
+# ---------------------------------------------------------------- stim -> detector error model
+
+MAX_STIM_CHARS = 2_000_000
+STIM_SUPPORTED = (
+    "H, CX (CNOT), R, M, MR, X_ERROR, Y_ERROR, Z_ERROR, DEPOLARIZE1, DEPOLARIZE2, DETECTOR and OBSERVABLE_INCLUDE "
+    "(TICK, QUBIT_COORDS and SHIFT_COORDS are ignored; REPEAT blocks are unrolled)"
+)
+
+
+def _xor(p: float, q: float) -> float:
+    """The probability that exactly one of two independent events happens."""
+    return p * (1 - q) + q * (1 - p)
+
+
+def _mechanisms(dem: Any, *, detector_shift: int = 0, observables: list[int] | None = None) -> dict:
+    """A DEM as {set of targets: probability}, merging identical symptoms; paritea's ids mapped to stim's."""
+    merged: dict[frozenset, float] = {}
+    for instruction in dem.flattened():
+        if instruction.type != "error":
+            continue
+        targets = []
+        for t in instruction.targets_copy():
+            if t.is_relative_detector_id():
+                targets.append(("D", t.val - detector_shift))
+            elif t.is_logical_observable_id():
+                targets.append(("L", observables[t.val] if observables else t.val))
+        key = frozenset(targets)
+        p = instruction.args_copy()[0]
+        merged[key] = _xor(merged[key], p) if key in merged else p
+    return merged
+
+
+def _stim_circuit(preset: dict | None, text: str | None) -> Any:
+    import stim  # only the stim tool needs it
+
+    if getattr(stim, "__file__", "").find("_stubs") != -1:
+        raise UserError("stim is not available in this browser engine yet.")
+    if preset:
+        d, r, p = preset.get("distance"), preset.get("rounds"), preset.get("p")
+        if not isinstance(d, int) or not 2 <= d <= 9:
+            raise UserError("The distance must be a whole number from 2 to 9.")
+        if not isinstance(r, int) or not 1 <= r <= 20:
+            raise UserError("The number of rounds must be a whole number from 1 to 20.")
+        if not isinstance(p, int | float) or not 0 <= p <= 0.1:
+            raise UserError("The error rate p must be between 0 and 0.1.")
+        return stim.Circuit.generated(
+            "surface_code:rotated_memory_z",
+            distance=d,
+            rounds=r,
+            after_clifford_depolarization=p,
+            after_reset_flip_probability=p,
+            before_measure_flip_probability=p,
+            before_round_data_depolarization=p,
+        )
+    if not text or not text.strip():
+        raise UserError("Paste a stim circuit or choose a file first.")
+    if len(text) > MAX_STIM_CHARS:
+        raise UserError("The circuit is larger than 2 MB.")
+    try:
+        return stim.Circuit(text)
+    except ValueError as exc:
+        raise UserError(f"stim couldn't read this circuit: {exc}") from exc
+
+
+def stim_dem(preset: dict | None = None, text: str | None = None, filename: str = "") -> dict[str, Any]:
+    """paritea's detector error model of a stim circuit, as in paritea's stim demo, checked against stim's own."""
+    from paritea.glue.stim import export_to_stim_dem, from_stim, push_out_for_measurement_detectors
+
+    circuit = _stim_circuit(preset, text)
+    flat = circuit.flattened()
+    start = time.perf_counter()
+    try:
+        diagram, noise, measurements, observables, detectors = from_stim(flat)
+    except NotImplementedError as exc:
+        raise UserError(f"paritea can't import this circuit: {exc}. It supports {STIM_SUPPORTED}.") from exc
+    except (ValueError, RuntimeError, KeyError) as exc:
+        raise UserError(f"paritea can't import this circuit: {exc}") from exc
+    order = sorted(observables)
+    try:
+        pushed, logical_regions, detector_regions = push_out_for_measurement_detectors(
+            noise, measurement_nodes=measurements, logicals=[observables[k] for k in order], detectors=detectors
+        )
+    except RuntimeError as exc:
+        raise UserError(
+            f"paritea couldn't express the circuit's detectors through its detecting regions: {exc}"
+        ) from exc
+    pushed.compress(_xor)
+    dem = export_to_stim_dem(pushed, logical_regions=logical_regions, detector_regions=detector_regions)
+    seconds = time.perf_counter() - start
+
+    ours = _mechanisms(dem, detector_shift=len(order), observables=order)
+    comparison: dict[str, Any] = {"available": False}
+    try:
+        reference = _mechanisms(circuit.detector_error_model(decompose_errors=False))
+    except ValueError as exc:
+        comparison["message"] = f"stim couldn't build its own detector error model: {exc}"
+    else:
+        shared = set(ours) & set(reference)
+        comparison = {
+            "available": True,
+            "paritea": len(ours),
+            "stim": len(reference),
+            "only_paritea": len(set(ours) - shared),
+            "only_stim": len(set(reference) - shared),
+            "worst_relative": max(
+                (abs(ours[k] - reference[k]) / reference[k] for k in shared if reference[k]), default=0
+            ),
+        }
+
+    name = (
+        f"stim surface code (distance {preset['distance']}, {preset['rounds']} rounds, p {preset['p']})"
+        if preset
+        else (filename or "pasted stim circuit")
+    )
+    filename = filename or "circuit.stim"
+    entry = SHELF.add(
+        place_unpositioned(diagram),
+        name=name,
+        source={"kind": "stim", "preset": preset, "filename": filename},
+        code=codegen.stim_diagram_code(preset, filename),
+    )
+    dem_code = codegen.stim_dem_code(preset, filename)
+    text_dem = str(dem)
+    return {
+        "name": name,
+        "summary": {
+            "Qubits": circuit.num_qubits,
+            "Detectors": len(detector_regions),
+            "Observables": len(logical_regions),
+            "Error mechanisms": dem.num_errors,
+        },
+        "dem": text_dem,
+        "comparison": comparison,
+        "diagram": {"id": entry.id, "name": entry.name, "summary": summary(entry.diagram)},
+        "entry": {"id": entry.id, "name": entry.name, "summary": summary(entry.diagram), "source": entry.source},
+        "seconds": seconds,
+        "code": dem_code,
+        "sinter_code": codegen.sinter_code(dem_code),
+    }
+
+
 # ---------------------------------------------------------------- Pauli webs
 
 
@@ -639,6 +780,7 @@ OPS: dict[str, Callable[..., Any]] = {
     "noise_remove": noise_remove,
     "fault_equivalence": fault_equivalence,
     "propagation": propagation,
+    "stim_dem": stim_dem,
     "semantic_equivalence": semantic_equivalence,
     "webs": webs,
     "pauli_webs": pauli_webs,

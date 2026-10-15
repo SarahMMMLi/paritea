@@ -1,0 +1,36 @@
+--- a/setup.py
++++ b/setup.py
+@@ -11,6 +11,7 @@
+ # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ # See the License for the specific language governing permissions and
+ # limitations under the License.
++import os
+ import platform
+ 
+ from setuptools import setup, Extension
+@@ -99,6 +100,12 @@
+ 
+ def _get_extensions():
+     archs=["x86", "i686", "i386", "amd64"]
++    if os.environ.get("PYODIDE") == "1":
++        # WebAssembly (pyodide-build sets PYODIDE=1): no x86 SIMD, so build only the portable extension
++        # (otherwise _stim_sse2's -msse2 makes Emscripten demand -msimd128), and compile files in parallel.
++        from pybind11.setup_helpers import ParallelCompile
++        ParallelCompile("PYODIDE_JOBS", default=0).install()
++        return [stim_detect_machine_architecture, stim_polyfill]
+     if any(_ext in platform.processor().lower() for _ext in archs):
+         # NOTE: disabled until https://github.com/quantumlib/Stim/issues/432 is fixed
+         # stim_avx2,
+--- a/src/stim/py/march.pybind.cc
++++ b/src/stim/py/march.pybind.cc
+@@ -6,8 +6,8 @@
+ //  Windows
+ #include <intrin.h>
+ #define cpuid(info, x) __cpuidex(info, x, 0)
+-#elif (defined(__arm64__) && defined(__APPLE__)) || defined(__aarch64__) || defined(_ARCH_PPC)
+-// macOS ARM64 and IBM PowerPC (dummied out)
++#elif (defined(__arm64__) && defined(__APPLE__)) || defined(__aarch64__) || defined(_ARCH_PPC) || defined(__EMSCRIPTEN__)
++// macOS ARM64, IBM PowerPC and Emscripten/WebAssembly (dummied out)
+ void cpuid(int info[4], int infoType) {
+     info[0] = 0;
+     info[1] = 0;

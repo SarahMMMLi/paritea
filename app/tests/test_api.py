@@ -384,3 +384,55 @@ def test_fault_equivalence_python_reproduces_the_answer() -> None:
     exec(result["code"].replace("print(", "answer = ("), namespace)  # noqa: S102
 
     assert namespace["answer"] is result["equivalent"] is True
+
+
+@pytest.mark.parametrize(
+    ("preset", "expected"),
+    [
+        ({"distance": 3, "rounds": 2, "p": 0.001}, (16, 1, 107)),
+        ({"distance": 3, "rounds": 3, "p": 0.01}, (24, 1, 219)),
+    ],
+)
+def test_stim_dem_matches_stims_own_model(preset: dict, expected: tuple[int, int, int]) -> None:
+    result = call("stim_dem", preset=preset)
+
+    s = result["summary"]
+    assert (s["Detectors"], s["Observables"], s["Error mechanisms"]) == expected
+    c = result["comparison"]
+    assert c["available"]
+    assert (c["paritea"], c["stim"], c["only_paritea"], c["only_stim"]) == (expected[2], expected[2], 0, 0)
+    assert c["worst_relative"] < 1e-9
+    assert result["dem"].count("error(") == expected[2]
+
+
+def test_stim_dem_of_pasted_text_and_its_python(tmp_path, monkeypatch) -> None:
+    import stim
+
+    text = str(
+        stim.Circuit.generated(
+            "surface_code:rotated_memory_z", distance=3, rounds=2, after_clifford_depolarization=0.01
+        )
+    )
+
+    result = call("stim_dem", text=text, filename="memory.stim")
+
+    assert result["comparison"]["only_paritea"] == result["comparison"]["only_stim"] == 0
+    (tmp_path / "memory.stim").write_text(text)
+    monkeypatch.chdir(tmp_path)
+    namespace: dict = {}
+    exec(result["code"].replace("print(dem)", "pass"), namespace)  # noqa: S102
+    assert str(namespace["dem"]) == result["dem"]
+    # The circuit's ZX diagram went on the shelf and can be analysed.
+    assert call("webs", diagram=result["diagram"]["id"])["regions"]
+
+
+@pytest.mark.parametrize(
+    ("text", "message"),
+    [
+        ("S 0\nM 0\n", "can't import this circuit"),
+        ("H 0\nM 0\nNOT_AN_INSTRUCTION 0\n", "stim couldn't read this circuit"),
+        ("", "Paste a stim circuit"),
+    ],
+)
+def test_stim_dem_explains_bad_circuits(text: str, message: str) -> None:
+    assert message in error("stim_dem", text=text)["message"]

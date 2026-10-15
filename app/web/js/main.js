@@ -2,6 +2,7 @@
 
 import { Engine } from "./engine.js";
 import { shelf } from "./shelf.js";
+import { renderDem } from "./tools/dem.js";
 import { renderDiagrams } from "./tools/diagrams.js";
 import { renderFault } from "./tools/fault.js";
 import { renderHome } from "./tools/home.js";
@@ -59,6 +60,7 @@ const ctx = {
 
 const ROUTES = {
   "": [renderHome, "paritea in your browser"],
+  dem: [renderDem, "stim → detector error model · paritea"],
   diagrams: [renderDiagrams, "Diagrams · paritea"],
   fault: [renderFault, "Fault equivalence · paritea"],
   noise: [renderNoise, "Noise model · paritea"],

@@ -253,6 +253,49 @@ def check_fault(page) -> list[str]:
     return failures
 
 
+def check_dem(page) -> list[str]:
+    """stim's surface-code circuit, a pasted circuit and an unsupported one."""
+    failures = []
+    page.goto(URL + "#/dem")
+    page.click("[data-source='preset']")
+    page.fill("#dem-d", "3")
+    page.fill("#dem-r", "2")
+    page.fill("#dem-p", "0.001")
+    page.evaluate("window.lastDem = null")
+    page.click("#run")
+    page.wait_for_function("window.lastDem !== null", timeout=180_000)
+    result = page.evaluate("window.lastDem")
+    page.screenshot(path=SHOTS / "12-dem.png", full_page=True)
+    s, c = result["summary"], result["comparison"]
+    got = (s["Detectors"], s["Observables"], s["Error mechanisms"], c.get("only_paritea"), c.get("only_stim"))
+    ok = got == (16, 1, 107, 0, 0) and c["worst_relative"] < 1e-9
+    print(f"{'OK  ' if ok else 'FAIL'} DEM: surface code d=3 r=2 -> {got}, worst {c.get('worst_relative')}")
+    if not ok:
+        failures.append(f"dem preset {got}")
+
+    page.click("[data-source='text']")
+    page.fill("#dem-text", "R 0 1\nCX 0 1\nX_ERROR(0.1) 1\nM 0 1\nDETECTOR rec[-1] rec[-2]\n")
+    page.evaluate("window.lastDem = null")
+    page.click("#run")
+    page.wait_for_function("window.lastDem !== null", timeout=60_000)
+    small = page.evaluate("window.lastDem")
+    counts = (small["summary"]["Detectors"], small["summary"]["Error mechanisms"])
+    ok = counts == (1, 1) and small["comparison"]["only_stim"] == 0
+    print(f"{'OK  ' if ok else 'FAIL'} DEM: pasted circuit -> {small['summary']}")
+    if not ok:
+        failures.append("dem pasted")
+
+    page.fill("#dem-text", "S 0\nM 0\n")
+    page.click("#run")
+    page.wait_for_selector("#results .alert-error", timeout=60_000)
+    message = page.inner_text("#results .alert-error")
+    ok = "can't import this circuit" in message
+    print(f"{'OK  ' if ok else 'FAIL'} DEM: unsupported instruction explained")
+    if not ok:
+        failures.append(f"dem unsupported: {message}")
+    return failures
+
+
 def main() -> int:
     failures = []
     with sync_playwright() as p:
@@ -292,6 +335,7 @@ def main() -> int:
         failures += check_noise(page)
         failures += check_propagation(page)
         failures += check_semantic(page)
+        failures += check_dem(page)
         failures += check_fault(page)
 
         # Show a detecting region on the first example for a screenshot.

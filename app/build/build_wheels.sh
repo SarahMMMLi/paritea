@@ -7,6 +7,7 @@ set -euo pipefail
 
 PYODIDE_VERSION=314.0.7
 PYODIDE_BUILD_VERSION=0.39.1
+STIM_VERSION=1.16.0  # as in app/uv.lock
 # Pure-Python or Pyodide wheels from PyPI, pinned to the versions in app/uv.lock: name==version.
 PYPI_WHEELS=(rustworkx==0.18.1 pyzx==0.10.7 frozendict==2.4.7 lark==1.3.1 pyperclip==1.11.0)
 
@@ -49,6 +50,34 @@ for pin in sys.argv[2:]:
         urllib.request.urlretrieve(wheel["url"], target)
     print(target.name)
 PY
+
+echo "== stim $STIM_VERSION (C++; compiled once per version and patch, then taken from the cache)"
+STIM_KEY="$(cat "$APP_DIR"/build/patches/stim/*.patch | shasum -a 256 | cut -c1-12)"
+STIM_CACHE="$CACHE/stim-$STIM_VERSION-pyodide-$PYODIDE_VERSION-$STIM_KEY"
+if ! ls "$STIM_CACHE"/stim-*.whl > /dev/null 2>&1; then
+  STIM_SRC="$(mktemp -d)"
+  "$CACHE/pyodide-env/bin/python" - "$STIM_SRC" "$STIM_VERSION" <<'PY'
+import json
+import sys
+import tarfile
+import urllib.request
+
+target, version = sys.argv[1], sys.argv[2]
+meta = json.load(urllib.request.urlopen(f"https://pypi.org/pypi/stim/{version}/json"))
+sdist = next(u for u in meta["urls"] if u["packagetype"] == "sdist")
+archive = f"{target}/stim.tar.gz"
+urllib.request.urlretrieve(sdist["url"], archive)
+with tarfile.open(archive) as tar:
+    tar.extractall(target, filter="data")
+PY
+  for fix in "$APP_DIR"/build/patches/stim/*.patch; do
+    patch -p1 --forward -s -d "$STIM_SRC/stim-$STIM_VERSION" < "$fix"
+    echo "Applied $(basename "$fix")"
+  done
+  (cd "$STIM_SRC/stim-$STIM_VERSION" && "$PYODIDE" build . -o "$STIM_CACHE")
+fi
+rm -f "$OUT"/stim-*.whl
+cp "$STIM_CACHE"/stim-*.whl "$OUT"/
 
 echo "== paritea (from a scratch copy, optimised build that keeps Rust panics catchable)"
 SRC="$(mktemp -d)/paritea"

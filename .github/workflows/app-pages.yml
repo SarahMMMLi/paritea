@@ -39,7 +39,13 @@ jobs:
           enable-cache: 'true'
           cache-dependency-glob: 'app/uv.lock'
 
-      - name: Build the browser wheels (paritea compiled to WebAssembly)
+      - name: Restore the stim wheel (compiling stim's C++ takes a while)
+        uses: actions/cache@v6
+        with:
+          path: ~/.cache/paritea-web/stim-*
+          key: stim-${{ hashFiles('app/build/patches/stim/**', 'app/build/build_wheels.sh') }}
+
+      - name: Build the browser wheels (paritea and stim compiled to WebAssembly)
         run: app/build/build_wheels.sh
 
       - name: Install the app (builds paritea natively)
