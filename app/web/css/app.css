@@ -229,7 +229,7 @@ kbd { font-family: var(--mono); font-size: 12px; border: 1px solid var(--border-
 
 .viewer { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow); overflow: hidden; }
 .viewer-bar { display: flex; align-items: center; gap: 12px; padding: 10px 12px; border-bottom: 1px solid var(--border); flex-wrap: wrap; }
-.segmented { display: inline-flex; background: var(--surface-2); border-radius: 10px; padding: 3px; gap: 2px; }
+.segmented { display: inline-flex; flex-wrap: wrap; max-width: 100%; background: var(--surface-2); border-radius: 10px; padding: 3px; gap: 2px; }
 .segmented button { font: inherit; font-size: 13px; font-weight: 600; color: var(--text-2); background: transparent; border: 0; border-radius: 8px; padding: 6px 12px; cursor: pointer; }
 .segmented button[aria-selected="true"], .segmented button[aria-pressed="true"] { background: var(--surface); color: var(--text); box-shadow: 0 1px 2px rgb(15 23 42 / 0.12); }
 .segmented .count { color: var(--text-3); font-weight: 500; margin-left: 4px; font-variant-numeric: tabular-nums; }
@@ -298,7 +298,9 @@ pre.code { margin: 0; padding: 14px; font-size: 13px; line-height: 1.6; overflow
   .io-cards, .below { grid-template-columns: 1fr; }
   .stats { grid-template-columns: repeat(3, 1fr); }
   svg.diagram { height: 380px; }
-  .engine-label { max-width: 46vw; overflow: hidden; text-overflow: ellipsis; }
+  .topbar-inner { gap: 12px; }
+  .engine { min-width: 0; }
+  .engine-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 }
 
 /* Diagrams tool and shelf */
@@ -404,8 +406,8 @@ pre.dem-text { max-height: 360px; font-size: 12px; }
 /* Python console */
 .console-panel textarea { min-height: 220px; font-size: 13.5px; tab-size: 4; }
 .console-bar { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 10px; }
-.param.inline { flex-direction: row; align-items: center; gap: 8px; font-size: 13px; font-weight: 600; color: var(--text-2); }
-.param.inline select { min-height: 34px; padding: 4px 8px; width: auto; }
+.param.inline { flex-direction: row; align-items: center; gap: 8px; font-size: 13px; font-weight: 600; color: var(--text-2); min-width: 0; max-width: 100%; }
+.param.inline select { min-height: 34px; padding: 4px 8px; width: auto; min-width: 0; flex: 1 1 auto; }
 .console-output { display: flex; flex-direction: column; gap: 12px; }
 .cell { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-sm); overflow: hidden; }
 .cell pre { margin: 0; padding: 10px 14px; font-size: 13px; line-height: 1.55; overflow: auto; white-space: pre-wrap; }

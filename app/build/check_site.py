@@ -385,6 +385,19 @@ CLICKS = {
 }
 
 
+PHONE_WIDTH = 360  # a small phone; fonts on Linux (CI) run wider than on macOS, so this leaves some margin
+# How far the page scrolls sideways, and which elements stick out (content that scrolls inside its own box is fine).
+STICKING_OUT = """() => {
+  const width = document.documentElement.clientWidth;
+  const out = [...document.querySelectorAll('body *')]
+    .filter((el) => el.getBoundingClientRect().right > width + 0.5 && !el.closest('.canvas-wrap, .table-wrap, pre'))
+    .slice(0, 5)
+    .map((el) => el.tagName.toLowerCase() + (el.id ? '#' + el.id : '')
+      + [...el.classList].map((c) => '.' + c).join(''));
+  return [document.documentElement.scrollWidth - width, out];
+}"""
+
+
 def check_accessibility(browser) -> list[str]:
     """axe-core finds no violations on any page, with a result showing, in light and dark mode; no page scrolls sideways
     on a phone."""
@@ -410,13 +423,13 @@ def check_accessibility(browser) -> list[str]:
                 """async () => (await axe.run(document, { resultTypes: ['violations'] })).violations
                   .map((v) => `${v.id}: ${v.nodes.slice(0, 3).map((n) => n.target.join(' ')).join(', ')}`)"""
             )
-            page.set_viewport_size({"width": 390, "height": 844})
-            sideways = page.evaluate("document.documentElement.scrollWidth - document.documentElement.clientWidth")
+            page.set_viewport_size({"width": PHONE_WIDTH, "height": 800})
+            sideways, sticking_out = page.evaluate(STICKING_OUT)
             page.set_viewport_size({"width": 1280, "height": 860})
             ok = not violations and sideways <= 0
             print(
                 f"{'OK  ' if ok else 'FAIL'} Accessibility ({scheme}): {name}: {violations or 'no axe violations'}"
-                f"{'' if sideways <= 0 else f', scrolls sideways on a phone by {sideways} px'}"
+                + ("" if sideways <= 0 else f", scrolls sideways on a phone by {sideways} px: {sticking_out}")
             )
             if not ok:
                 failures.append(f"accessibility of {name} ({scheme}): {violations}, sideways {sideways}")
