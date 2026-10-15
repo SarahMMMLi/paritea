@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>paritea in your browser</title>
+  <meta name="description" content="Use paritea, a toolkit for faults in Clifford ZX diagrams, directly in your browser. Nothing to install.">
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="css/app.css">
+  <script type="module" src="js/main.js"></script>
+</head>
+<body>
+  <header class="topbar">
+    <div class="topbar-inner">
+      <a class="brand" href="#/" aria-label="paritea home">
+        <svg class="brand-mark" viewBox="0 0 32 32" aria-hidden="true">
+          <line x1="9" y1="16" x2="23" y2="16" class="mark-edge"/>
+          <circle cx="9" cy="16" r="6" class="mark-z"/>
+          <circle cx="23" cy="16" r="6" class="mark-x"/>
+        </svg>
+        <span class="brand-name">paritea</span>
+      </a>
+      <nav class="topnav" aria-label="Main">
+        <a href="#/">Tools</a>
+        <a href="https://github.com/paritea/paritea" target="_blank" rel="noopener">GitHub <span aria-hidden="true">↗</span></a>
+      </nav>
+      <div class="engine" id="engine-status" role="status" aria-live="polite" data-state="loading">
+        <span class="engine-dot" aria-hidden="true"></span>
+        <span class="engine-label">Starting the engine…</span>
+      </div>
+    </div>
+  </header>
+
+  <main id="app" class="container" tabindex="-1"></main>
+
+  <footer class="footer">
+    <div class="container footer-inner">
+      <span>paritea runs locally in your browser via <a href="https://pyodide.org" target="_blank" rel="noopener">Pyodide</a>; nothing is uploaded.</span>
+      <span>Prototype · October 2026</span>
+    </div>
+  </footer>
+  <noscript><p class="container">This page needs JavaScript to run paritea in your browser.</p></noscript>
+</body>
+</html>

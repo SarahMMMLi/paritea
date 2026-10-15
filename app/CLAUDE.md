@@ -44,6 +44,32 @@ A `VIRTUAL_ENV ... does not match` warning from uv just means another venv is ac
 - Draw with `matplotlib.figure.Figure()` (as `drawing.py` does), not `pyplot`, and show it with `st.pyplot(fig)`.
 - Style: ruff with the library's rules (`../ruff.toml`, line length 120). Keyword-only boolean parameters (`FBT`).
 
+## Web page (`web/`): paritea in the browser
+
+`web/` is a static page that runs paritea client-side: Pyodide 314.0.7 (Python on WebAssembly) in a module web worker,
+with paritea's Rust extension compiled to WebAssembly. `.github/workflows/app-pages.yml` builds, checks and publishes it
+to https://sarahmmmli.github.io/paritea/ on every push to `main`.
+
+```shell
+./build/build_wheels.sh                        # browser wheels -> web/wheels/ (toolchains cached in ~/.cache/paritea-web)
+uv run python build/precompute.py              # native reference results -> web/data/ (preview mode, browser check)
+uv run python build/build_site.py              # web/py/paritea_ui.zip + web/engine.json; rerun after editing paritea_ui
+python3 -m http.server 8000 --directory web    # http://localhost:8000
+```
+
+| Path | Role |
+|---|---|
+| `web/js/worker.js` | The engine: loads Pyodide, installs `web/wheels` with `deps=False`, calls `paritea_ui.api.dispatch` |
+| `web/js/engine.js` | Worker client; falls back to `web/data` (preview mode) if the engine cannot start, or with `?engine=precomputed` |
+| `web/js/main.js`, `web/js/diagram-view.js`, `web/css/app.css` | Tool catalogue, Pauli webs tool, SVG diagram view, design tokens |
+| `paritea_ui/api.py` | JSON-in/JSON-out operations the page calls; register new ones in `OPS` |
+| `paritea_ui/compat/` | Stand-ins for galois (`GF2`), recordclass and an `mpl_toolkits` import; used only when the real package is absent |
+| `build/check_site.py` | Headless-browser check that in-browser results match the native ones (needs Playwright) |
+
+- `build_wheels.sh` builds paritea from a scratch copy of the repository, so no upstream file is modified.
+- Never build the browser wheel with the `release-py` profile: `panic = "abort"` turns any Rust panic into a dead engine.
+- Generated files (`web/wheels`, `web/py`, `web/data`, `web/engine.json`) are gitignored and rebuilt by CI.
+
 ## paritea API cheat sheet
 
 Imports: `from paritea import Pauli, PauliString, build_flip_operators, push_out`, `from paritea.diagram import

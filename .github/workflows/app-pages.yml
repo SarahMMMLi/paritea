@@ -1,0 +1,87 @@
+name: App - Deploy web page to GitHub Pages
+# Fork-owned (see CLAUDE.md). Builds the static page in app/web, with paritea compiled to WebAssembly, checks it in a
+# headless browser and publishes it at https://sarahmmmli.github.io/paritea/.
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'app/**'
+      - 'src/**'
+      - 'rust/**'
+      - 'pyproject.toml'
+      - 'Cargo.toml'
+      - 'Cargo.lock'
+      - '.github/workflows/app-pages.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Install Rust with the WebAssembly target
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-emscripten
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: 'true'
+          cache-dependency-glob: 'app/uv.lock'
+
+      - name: Build the browser wheels (paritea compiled to WebAssembly)
+        run: app/build/build_wheels.sh
+
+      - name: Install the app (builds paritea natively)
+        working-directory: app
+        run: uv sync --locked
+
+      - name: Package the engine's Python and precompute the preview results
+        working-directory: app
+        run: |
+          uv run python build/precompute.py
+          uv run python build/build_site.py
+
+      - name: Check the page in a headless browser
+        working-directory: app
+        run: |
+          python3 -m http.server 8765 --bind 127.0.0.1 --directory web &
+          uv run --with playwright python -m playwright install --with-deps chromium
+          uv run --with playwright python build/check_site.py http://127.0.0.1:8765/ build/screenshots
+
+      - name: Upload screenshots
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: screenshots
+          path: app/build/screenshots
+          if-no-files-found: ignore
+
+      - name: Upload the site
+        uses: actions/upload-pages-artifact@v5
+        with:
+          path: app/web
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v5
