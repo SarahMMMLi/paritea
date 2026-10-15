@@ -3,6 +3,7 @@
 import { shelf } from "../shelf.js";
 import {
   codeCardHtml,
+  copyLinkHtml,
   download,
   errorHtml,
   escapeHtml,
@@ -10,16 +11,24 @@ import {
   noticeHtml,
   plural,
   scrollToResult,
+  setLink,
   statsHtml,
   wireCopyButtons,
+  wireCopyLink,
   withBusyButton,
 } from "../ui.js";
 
 const MAX_DEM_LINES = 400;
 const remembered = { source: "preset", distance: 3, rounds: 2, p: 0.001, text: "", filename: "" };
 
-export async function renderDem(ctx) {
+export async function renderDem(ctx, query) {
   const live = ctx.engine.mode !== "precomputed";
+  // A link gives the surface-code circuit's distance, rounds and error rate; it runs straight away.
+  const fromLink = ["distance", "rounds", "p"].some((key) => key in query);
+  if (fromLink) {
+    remembered.source = "preset";
+    for (const key of ["distance", "rounds", "p"]) if (key in query) remembered[key] = Number(query[key]);
+  }
   ctx.app.innerHTML = `
     <nav class="crumbs"><a href="#/">Tools</a> / stim → detector error model</nav>
     <header class="tool-head">
@@ -95,6 +104,7 @@ export async function renderDem(ctx) {
     e.preventDefault();
     build(ctx);
   });
+  if (fromLink) document.getElementById("dem-form").requestSubmit();
 }
 
 async function build(ctx) {
@@ -147,6 +157,8 @@ function comparisonHtml(c) {
 
 function showResult(result) {
   window.lastDem = result; // for the browser check in app/build/check_site.py
+  const preset = result.entry.source.preset;
+  setLink("dem", preset);
   const results = document.getElementById("results");
   const lines = result.dem.split("\n");
   const shown = lines.slice(0, MAX_DEM_LINES).join("\n");
@@ -156,7 +168,7 @@ function showResult(result) {
       <h2 class="headline">${plural(s.Detectors, "detector")}, ${plural(s.Observables, "observable")} and
         ${plural(s["Error mechanisms"], "error mechanism")}</h2>
       <p class="meta">${escapeHtml(result.name)} · computed in ${formatSeconds(result.seconds)}
-        <span class="where">in your browser</span></p>
+        <span class="where">in your browser</span>${preset ? ` · ${copyLinkHtml()}` : ""}</p>
     </div>
     ${comparisonHtml(result.comparison)}
     ${noticeHtml(`paritea numbers the observables first, so its detectors start at D${s.Observables}: its D${s.Observables} is stim's D0, and so on. The check above takes this into account.`)}
@@ -179,6 +191,7 @@ function showResult(result) {
   const [codeCard, sinterCard] = results.querySelectorAll(".code-card");
   wireCopyButtons(codeCard, result.code);
   wireCopyButtons(sinterCard, result.sinter_code);
+  wireCopyLink(results);
   document.getElementById("dem-download").addEventListener("click", () =>
     download(`${result.diagram.id.toLowerCase()}-paritea.dem`, result.dem),
   );

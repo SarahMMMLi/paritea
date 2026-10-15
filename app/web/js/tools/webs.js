@@ -3,17 +3,22 @@
 import { shelf } from "../shelf.js";
 import {
   codeCardHtml,
+  copyLinkHtml,
   errorHtml,
   escapeHtml,
   formatSeconds,
+  generatorFromLink,
   mountViewer,
   noticeHtml,
   paramsHtml,
   plural,
   readParams,
+  recipeOf,
+  setLink,
   statsHtml,
   viewerHtml,
   wireCopyButtons,
+  wireCopyLink,
   withBusyButton,
 } from "../ui.js";
 
@@ -57,7 +62,11 @@ export async function renderWebs(ctx, query) {
 
   const { generators } = await ctx.engine.catalogue;
   const live = ctx.engine.mode !== "precomputed";
-  let source = query.diagram ? "shelf" : (remembered.source ?? (shelf.size && live ? "shelf" : "generate"));
+  // A link names a generator and its parameters, an example, or (within this tab) a diagram on the shelf.
+  const fromLink = query.generator ? generatorFromLink(generators, query) : null;
+  if (fromLink) Object.assign(remembered, { source: "generate", ...fromLink });
+  let source = fromLink ? "generate" : query.diagram || query.example ? "shelf"
+    : (remembered.source ?? (shelf.size && live ? "shelf" : "generate"));
   if (query.diagram) remembered.diagram = query.diagram;
 
   const showSource = (next) => {
@@ -107,7 +116,36 @@ export async function renderWebs(ctx, query) {
   form.addEventListener("keydown", (e) => {
     if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) form.requestSubmit();
   });
-  if (query.run === "1" && source === "shelf" && document.getElementById("shelf-pick")) form.requestSubmit();
+
+  const results = document.getElementById("results");
+  if (query.generator && !fromLink) {
+    results.innerHTML = errorHtml("This link doesn't work.", new Error(`There is no generator called "${query.generator}".`));
+  } else if (fromLink) {
+    form.requestSubmit();
+  } else if (query.example) {
+    let entry;
+    const busy = ctx.engine.mode === "starting" ? "Waiting for the engine…" : "Opening the example…";
+    await withBusyButton(document.getElementById("run"), busy, async () => {
+      try {
+        entry = await ctx.engine.run("diagram_example", { example: query.example });
+      } catch (err) {
+        results.innerHTML = errorHtml("This link doesn't work.", err);
+      }
+    });
+    if (!entry) return;
+    shelf.add(entry);
+    if (!form.isConnected) return; // the visitor went to another page meanwhile
+    remembered.diagram = entry.id;
+    showSource("shelf");
+    form.requestSubmit();
+  } else if (query.diagram && live && !shelf.entries.has(query.diagram)) {
+    results.innerHTML = noticeHtml(
+      `There's no ${query.diagram} on your shelf: the shelf belongs to the browser tab that made it. To share a ` +
+        "diagram, use Copy link next to its result.",
+    );
+  } else if (query.run === "1" && source === "shelf" && document.getElementById("shelf-pick")) {
+    form.requestSubmit();
+  }
 }
 
 async function compute(ctx, source, generators) {
@@ -173,12 +211,14 @@ function showResult(ctx, result) {
   const where = result.precomputed
     ? `<span class="where preview">precomputed natively (preview mode)</span>`
     : `computed in ${formatSeconds(total)} <span class="where">in your browser</span>`;
+  const recipe = recipeOf(result.source);
+  setLink("webs", recipe);
 
   results.innerHTML = `
     ${result.precomputed ? noticeHtml(ctx.engineMessage()) : ""}
     <div class="result-head">
       <h2 class="headline">${headline}</h2>
-      <p class="meta">${escapeHtml(result.name)} · ${where}</p>
+      <p class="meta">${escapeHtml(result.name)} · ${where}${recipe ? ` · ${copyLinkHtml()}` : ""}</p>
     </div>
     ${statsHtml(result.summary)}
     ${viewerHtml({
@@ -205,6 +245,7 @@ function showResult(ctx, result) {
 
   const view = mountViewer(results, result.diagram);
   wireCopyButtons(results, result.code);
+  wireCopyLink(results);
   const endpoints = new Map(result.diagram.edges.map(([e, s, t]) => [e, `${s} – ${t}`]));
   const state = { kind: nStab ? "stabilisers" : nReg ? "regions" : "none", index: 0 };
 

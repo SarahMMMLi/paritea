@@ -35,7 +35,7 @@ anything it calls, also run the browser check.
 | `web/index.html`, `web/css/app.css` | Page shell and styles (design tokens first, light and dark) |
 | `web/js/worker.js` | The engine: loads Pyodide, installs `web/wheels` with `deps=False`, calls `paritea_ui.api.dispatch` |
 | `web/js/engine.js` | Worker client; falls back to `web/data` (preview mode) if the engine cannot start, or with `?engine=precomputed` |
-| `web/js/main.js` | Boot, engine status pill and hash routing (`#/`, `#/diagrams`, `#/webs?diagram=D3&run=1`) |
+| `web/js/main.js` | Boot, engine status pill and hash routing (`#/`, `#/diagrams`, `#/webs?generator=z-web-grid&qubits=3`) |
 | `web/js/tools/*.js` | One module per page: `home.js` (tool catalogue), `console.js`, `dem.js`, `diagrams.js`, `fault.js`, `noise.js`, `propagation.js`, `semantic.js`, `webs.js` |
 | `web/js/ui.js`, `web/js/shelf.js`, `web/js/diagram-view.js` | Shared result blocks, the page's copy of the shelf, SVG drawing |
 | `paritea_ui/api.py` | JSON-in/JSON-out operations the page calls; register new ones in `OPS` |
@@ -65,6 +65,12 @@ anything it calls, also run the browser check.
   `codegen._GENERATOR_CODE`; the Diagrams page and the tests pick it up automatically. The builder must return a
   diagram with real IO and node positions.
 - **Examples need a known answer**, asserted by `tests/test_api.py` and shown on the page.
+- **Links recreate results.** A link can name a generator and its parameters
+  (`#/webs?generator=z-web-grid&qubits=3&depth=3`, slugs from `ui.slug`), an example (`?example=steane-state`) or the
+  stim preset (`#/dem?distance=3&rounds=2&p=0.001`); the page runs it on arrival. After a run, `ui.setLink` puts the
+  link that recreates the shown result in the address bar, with **Copy link** beside the result. Shelf ids
+  (`?diagram=D3`) only mean something inside the tab that made them. Anything read from a link is untrusted: convert or
+  escape it before it reaches HTML.
 - **Symbols never touch.** Every drawing on the page takes node positions from `layout.node_positions`, which spreads
   nodes at least `MIN_SPACING` apart without bending wires. New views, generators and labels must keep a visible gap
   between symbols too; a test checks every generator.

@@ -337,6 +337,85 @@ def check_console(page) -> list[str]:
     return failures
 
 
+def check_links(browser) -> tuple[list[str], list[str]]:
+    """Open shared links in a fresh tab: each must recreate its result and keep its address; bad links are explained."""
+    failures = []
+    origin = "/".join(URL.split("/")[:3])
+    context = browser.new_context(viewport={"width": 1280, "height": 860}, reduced_motion="reduce")
+    context.grant_permissions(["clipboard-read", "clipboard-write"], origin=origin)
+    page = context.new_page()
+    logs: list[str] = []
+    page.on("console", lambda m: logs.append(f"{m.type}: {m.text}"))
+    page.on("pageerror", lambda e: logs.append(f"pageerror: {e}"))
+
+    def open_link(link: str, result: str) -> dict:
+        if page.url.startswith(URL):
+            page.evaluate(f"window.{result} = null")
+        page.goto(URL + link)
+        page.wait_for_function(f"window.{result}", timeout=300_000)  # the first link also waits for the engine
+        return page.evaluate(f"window.{result}")
+
+    def report(name: str, got: object, expected: object, link: str) -> None:
+        address = "#" + page.url.split("#", 1)[1]
+        ok = got == expected and address == link
+        print(f"{'OK  ' if ok else 'FAIL'} Link: {name} -> {got}, address kept: {address == link}")
+        if not ok:
+            failures.append(f"link {name}: {got} != {expected}, or address {address} != {link}")
+
+    link = "#/webs?generator=z-web-grid&qubits=3&depth=3"
+    result = open_link(link, "lastResult")
+    report("webs of a Z-web grid 3x3 (cold start)", (len(result["stabilisers"]), len(result["regions"])), (6, 4), link)
+    page.click("[data-copy-link]")
+    copied = page.evaluate("navigator.clipboard.readText()")
+    ok = copied == URL + link
+    print(f"{'OK  ' if ok else 'FAIL'} Link: Copy link copies {copied}")
+    if not ok:
+        failures.append(f"Copy link copied {copied}")
+
+    result = open_link("#/webs?generator=z-web-grid", "lastResult")
+    counts = (len(result["stabilisers"]), len(result["regions"]))
+    report("missing parameters take their defaults", counts, (4, 1), "#/webs?generator=z-web-grid&qubits=2&depth=2")
+
+    link = "#/webs?example=steane-state"
+    result = open_link(link, "lastResult")
+    report("webs of an example", (len(result["stabilisers"]), len(result["regions"])), (7, 0), link)
+
+    link = "#/diagrams?generator=random-clifford-diagram&qubits=3&spiders=10&seed=1"
+    entry = open_link(link, "lastEntry")
+    report("random Clifford diagram, seed 1", entry["summary"]["Nodes"], 29, link)
+
+    link = "#/diagrams?example=ring-5"
+    entry = open_link(link, "lastEntry")
+    report("example diagram", entry["source"], {"kind": "example", "example": "ring-5"}, link)
+
+    link = "#/dem?distance=3&rounds=2&p=0.001"
+    dem = open_link(link, "lastDem")
+    s = dem["summary"]
+    report("DEM of the surface code", (s["Detectors"], s["Observables"], s["Error mechanisms"]), (16, 1, 107), link)
+
+    def explained(name: str, link: str, selector: str, text: str) -> None:
+        page.goto(URL + link)
+        page.wait_for_selector(f"{selector}:has-text('{text}')", timeout=60_000)
+        injected = page.evaluate("window.pwned === 1")
+        ok = not injected
+        print(f"{'OK  ' if ok else 'FAIL'} Link: {name} explained" + (" (and injected HTML!)" if injected else ""))
+        if not ok:
+            failures.append(f"link {name}: injected HTML ran")
+
+    explained("unknown generator", "#/webs?generator=nope", ".alert-error", 'There is no generator called "nope"')
+    explained("unknown example", "#/diagrams?example=nope", ".alert-error", 'There is no example called "nope"')
+    explained(
+        "crafted parameter",
+        "#/webs?generator=z-web-grid&qubits=%22%3E%3Cimg%20src%3Dx%20onerror%3Dwindow.pwned%3D1%3E",
+        ".alert-error",
+        "Qubits must be a whole number from 1 to 10.",
+    )
+    explained("another tab's shelf", "#/webs?diagram=D99", ".alert-preview", "no D99 on your shelf")
+    page.screenshot(path=SHOTS / "14-links.png", full_page=True)
+    context.close()
+    return failures, logs
+
+
 def main() -> int:
     failures = []
     with sync_playwright() as p:
@@ -379,6 +458,9 @@ def main() -> int:
         failures += check_dem(page)
         failures += check_console(page)
         failures += check_fault(page)
+        link_failures, link_logs = check_links(browser)
+        failures += link_failures
+        logs += link_logs
 
         # Show a detecting region on the first example for a screenshot.
         page.goto(URL + "#/webs")

@@ -3,18 +3,23 @@
 import { shelf } from "../shelf.js";
 import {
   codeCardHtml,
+  copyLinkHtml,
   download,
   errorHtml,
   escapeHtml,
+  generatorFromLink,
   mountViewer,
   noticeHtml,
   paramsHtml,
   plural,
-  scrollToResult,
   readParams,
+  recipeOf,
+  scrollToResult,
+  setLink,
   statsHtml,
   viewerHtml,
   wireCopyButtons,
+  wireCopyLink,
   withBusyButton,
 } from "../ui.js";
 
@@ -60,6 +65,10 @@ export async function renderDiagrams(ctx, query) {
     <section class="shelf-section" id="shelf" aria-label="Your diagrams"></section>`;
 
   const catalogue = await ctx.engine.catalogue;
+  // A link names a generator and its parameters, an example, or (within this tab) a diagram on the shelf.
+  const fromLink = query.generator ? generatorFromLink(catalogue.generators, query) : null;
+  if (fromLink) Object.assign(remembered, fromLink);
+
   const tabs = { generate: () => generateTab(ctx, catalogue), examples: () => examplesTab(ctx, catalogue), import: () => importTab(ctx) };
   const show = (tab) => {
     remembered.tab = tab;
@@ -67,15 +76,30 @@ export async function renderDiagrams(ctx, query) {
     tabs[tab]();
   };
   ctx.app.querySelectorAll("[data-tab]").forEach((b) => b.addEventListener("click", () => show(b.dataset.tab)));
-  show(tabs[query.tab] ? query.tab : remembered.tab);
+  show(fromLink ? "generate" : query.example ? "examples" : tabs[query.tab] ? query.tab : remembered.tab);
 
   renderShelf(ctx);
   const onChange = () => document.getElementById("shelf") && renderShelf(ctx);
   shelf.addEventListener("change", onChange);
   ctx.onLeave(() => shelf.removeEventListener("change", onChange));
 
-  const toShow = query.diagram ?? remembered.shown;
-  if (toShow && shelf.entries.has(toShow)) showDiagram(ctx, toShow);
+  if (query.generator && !fromLink) {
+    showError("This link doesn't work.", new Error(`There is no generator called "${query.generator}".`));
+  } else if (fromLink) {
+    document.getElementById("gen-form").requestSubmit();
+  } else if (query.example) {
+    const button = [...document.querySelectorAll("[data-example]")].find((b) => b.dataset.example === query.example);
+    if (button) button.click();
+    else showError("This link doesn't work.", new Error(`There is no example called "${query.example}".`));
+  } else if (query.diagram && !preview && !shelf.entries.has(query.diagram)) {
+    document.getElementById("results").innerHTML = noticeHtml(
+      `There's no ${query.diagram} on your shelf: the shelf belongs to the browser tab that made it. To share a ` +
+        "diagram, use Copy link next to it.",
+    );
+  } else {
+    const toShow = query.diagram ?? remembered.shown;
+    if (toShow && shelf.entries.has(toShow)) showDiagram(ctx, toShow);
+  }
 }
 
 // ---------------------------------------------------------------- Tabs
@@ -239,6 +263,8 @@ function ranges(ids) {
 function showEntry(ctx, entry) {
   window.lastEntry = entry; // for the browser check in app/build/check_site.py
   remembered.shown = entry.id;
+  const recipe = recipeOf(entry.source);
+  setLink("diagrams", recipe);
   const results = document.getElementById("results");
   const s = entry.summary;
   const closed = s.Inputs + s.Outputs === 0 ? " — no boundaries (a closed diagram)" : "";
@@ -250,7 +276,7 @@ function showEntry(ctx, entry) {
     <div class="result-head">
       <h2 class="headline">Saved as ${entry.id} · ${escapeHtml(entry.name)}</h2>
       <p class="meta">${plural(s.Nodes, "node")}, ${plural(s.Edges, "edge")}, ${plural(s.Inputs, "input")},
-        ${plural(s.Outputs, "output")}${closed}</p>
+        ${plural(s.Outputs, "output")}${closed}${recipe ? ` · ${copyLinkHtml()}` : ""}</p>
     </div>
     ${problems}
     ${entry.notes.map(noticeHtml).join("")}
@@ -269,6 +295,7 @@ function showEntry(ctx, entry) {
 
   const view = mountViewer(results, entry.diagram);
   wireCopyButtons(results, entry.code);
+  wireCopyLink(results);
   results.querySelectorAll("[data-export]").forEach((button) =>
     button.addEventListener("click", async () => {
       const fmt = button.dataset.export;

@@ -15,7 +15,8 @@ and nothing is uploaded.
 | stim → detector error model | A stim circuit | paritea's detector error model, checked against stim's own |
 | Python console | Python code | Anything paritea can do, with the diagrams made in the other tools |
 
-Every result comes with the Python that reproduces it.
+Every result comes with the Python that reproduces it, and results built from a generator, an example or stim's
+preset have a link that recreates them in anyone's browser.
 
 ## Run it locally
 

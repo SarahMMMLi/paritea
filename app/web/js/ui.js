@@ -107,6 +107,49 @@ export function mountViewer(root, diagram) {
   return view;
 }
 
+// ---------------------------------------------------------------- Links that recreate a result
+
+/** How links name a generator: "Z-web grid" is "z-web-grid". */
+export const slug = (name) => name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+
+/** The link query that recreates a shelf entry's diagram, or null for files, stim circuits and console diagrams. */
+export function recipeOf(source) {
+  if (source?.kind === "generator") return { generator: slug(source.generator), ...source.params };
+  if (source?.kind === "example") return { example: source.example };
+  return null;
+}
+
+/** The generator a link names, with its parameters (defaults where the link has none), or null if there is none. */
+export function generatorFromLink(generators, query) {
+  const generator = generators.find((g) => slug(g.name) === query.generator);
+  if (!generator) return null;
+  return {
+    generator: generator.name,
+    params: Object.fromEntries(generator.params.map((p) => [p.key, Number(query[p.key] ?? p.default)])),
+  };
+}
+
+/**
+ * Shows the link that recreates the page's result in the address bar (no reload, no new history entry), unless the
+ * visitor has gone to another page meanwhile. Without a query, the address is the page alone.
+ */
+export function setLink(page, query = null) {
+  if (location.hash.replace(/^#\/?/, "").split("?")[0] !== page) return;
+  const search = query ? new URLSearchParams(query).toString() : "";
+  history.replaceState(history.state, "", `#/${page}${search ? `?${search}` : ""}`);
+}
+
+export const copyLinkHtml = () => `<button type="button" class="text-btn" data-copy-link>Copy link</button>`;
+
+export function wireCopyLink(root) {
+  const button = root.querySelector("[data-copy-link]");
+  button?.addEventListener("click", async () => {
+    await navigator.clipboard.writeText(location.href);
+    button.textContent = "Link copied";
+    setTimeout(() => (button.textContent = "Copy link"), 1500);
+  });
+}
+
 /** Number inputs for a generator's parameters. */
 export function paramsHtml(generator, values = {}) {
   return generator.params
@@ -115,7 +158,7 @@ export function paramsHtml(generator, values = {}) {
       <div class="param">
         <label for="p-${p.key}">${escapeHtml(p.label)} <span class="range">(${p.step > 1 ? rangeWithStep(p) : `${p.min}–${p.max}`})</span></label>
         <input id="p-${p.key}" name="${p.key}" type="number" min="${p.min}" max="${p.max}" step="${p.step}" required
-          value="${values[p.key] ?? p.default}">
+          value="${escapeHtml(values[p.key] ?? p.default)}">
         ${p.help ? `<span class="param-help">${escapeHtml(p.help)}</span>` : ""}
       </div>`,
     )
@@ -134,7 +177,8 @@ export function readParams(generator) {
   for (const p of generator.params) {
     const input = document.getElementById(`p-${p.key}`);
     const value = Number(input.value);
-    if (!Number.isInteger(value) || value < p.min || value > p.max || (value - p.min) % p.step) {
+    // An empty or unreadable number input has the value "", which Number() would turn into 0.
+    if (input.value === "" || !Number.isInteger(value) || value < p.min || value > p.max || (value - p.min) % p.step) {
       input.focus();
       throw new Error(`${p.label} must be ${p.step > 1 ? `one of ${rangeWithStep(p)}` : `a whole number from ${p.min} to ${p.max}`}.`);
     }
