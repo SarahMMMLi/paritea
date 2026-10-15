@@ -13,12 +13,13 @@ from collections import Counter
 from collections.abc import Callable
 from typing import Any
 
+import numpy as np
 import pyzx as zx
 from paritea import PauliString, build_flip_operators, push_out
 from paritea.diagram import Diagram
 from paritea.glue.pyzx import from_pyzx, to_pyzx
 from paritea.noise import NoiseModel
-from paritea.web import compute_pauli_webs
+from paritea.web import compute_pauli_webs, compute_stabilisers, row_reduce_webs
 
 from paritea_ui import codegen
 from paritea_ui.core import GENERATORS, build_diagram, is_rust_panic
@@ -450,6 +451,59 @@ def propagation(noise: str) -> dict[str, Any]:
     }
 
 
+# ---------------------------------------------------------------- Semantic equivalence
+
+
+def _boundary_tableau(d: Diagram) -> np.ndarray:
+    """The diagram's stabilisers on its boundary, row reduced, exactly as paritea's is_semantic_equivalence does.
+
+    Columns are the boundaries in order (inputs, then outputs): first the Z parts, then the X parts.
+    """
+    idx_map = {d.incident_edges(b)[0]: i for i, b in enumerate(d.io_sorted())}
+    return np.asarray(row_reduce_webs(compute_stabilisers(d), idx_map), dtype=np.uint8)
+
+
+def _tableau_rows(tableau: np.ndarray) -> list[str]:
+    """Rows as Pauli strings over the boundaries (I, X, Y, Z), without the all-zero rows."""
+    n = tableau.shape[1] // 2
+    return ["".join("IXZY"[int(row[i + n]) + 2 * int(row[i])] for i in range(n)) for row in tableau if row.any()]
+
+
+def semantic_equivalence(a: str, b: str) -> dict[str, Any]:
+    """Whether two diagrams are the same linear map up to a scalar: the same stabilisers on their boundaries.
+
+    This is paritea's is_semantic_equivalence, computed from its parts so that stim is not needed.
+    """
+    sides = {}
+    tableaus = []
+    for key, entry_id in (("a", a), ("b", b)):
+        entry = SHELF.get(entry_id)
+        require_valid(entry.diagram)
+        inputs, outputs = entry.diagram.io()
+        tableau = _boundary_tableau(entry.diagram)
+        tableaus.append(tableau)
+        sides[key] = {
+            "id": entry.id,
+            "name": entry.name,
+            "inputs": len(inputs),
+            "outputs": len(outputs),
+            "rows": _tableau_rows(tableau),
+        }
+    equivalent = bool(np.array_equal(*tableaus))
+    if (sides["a"]["inputs"], sides["a"]["outputs"]) != (sides["b"]["inputs"], sides["b"]["outputs"]):
+        reason = "They have different numbers of inputs or outputs, so they cannot be the same map."
+    elif equivalent:
+        reason = "They have the same stabilisers on their boundaries, so they are the same map up to a scalar."
+    else:
+        reason = "Their stabilisers on the boundaries differ, so they are different maps."
+    return {
+        "equivalent": equivalent,
+        "reason": reason,
+        **sides,
+        "code": codegen.semantic_code(SHELF.get(a).code, SHELF.get(b).code),
+    }
+
+
 # ---------------------------------------------------------------- Pauli webs
 
 
@@ -492,6 +546,7 @@ OPS: dict[str, Callable[..., Any]] = {
     "noise_get": noise_get,
     "noise_remove": noise_remove,
     "propagation": propagation,
+    "semantic_equivalence": semantic_equivalence,
     "webs": webs,
     "pauli_webs": pauli_webs,
 }

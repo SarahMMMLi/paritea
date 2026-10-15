@@ -87,6 +87,17 @@ def one_pi_spider() -> Diagram:
     return d
 
 
+def one_half_pi_spider() -> Diagram:
+    """A single π/2 Z spider on a wire: not the same map as two π/2 spiders (paritea's tests)."""
+    d = Diagram()
+    b1 = d.add_node(NodeType.B, x=0, y=0)
+    z = d.add_node(NodeType.Z, phase=Fraction(1, 2), x=1.5, y=0)
+    b2 = d.add_node(NodeType.B, x=3, y=0)
+    d.add_edges([(b1, z), (z, b2)])
+    d.set_io(inputs=[b1], outputs=[b2], virtual=False)
+    return d
+
+
 def spider_star(legs: int = 6) -> Diagram:
     """One Z spider with a boundary on each of its legs (paritea's tests)."""
     d = Diagram()
@@ -157,6 +168,13 @@ EXAMPLES: dict[str, Example] = {
         "One π spider",
         "The fused form of the two π/2 spiders.",
         one_pi_spider,
+        stabilising_webs=2,
+        detecting_regions=0,
+    ),
+    "one-half-pi": Example(
+        "One π/2 spider",
+        "Half the phase of the fused pair, so a different map: semantic equivalence says no.",
+        one_half_pi_spider,
         stabilising_webs=2,
         detecting_regions=0,
     ),

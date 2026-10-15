@@ -263,3 +263,49 @@ def test_fault_propagation_python_reproduces_the_effects() -> None:
     exec(result["code"].replace("print(", "(lambda *a: None)("), namespace)  # noqa: S102
 
     assert len(list(namespace["pushed_out"].atomic_faults())) == result["summary"]["Distinct effects"]
+
+
+SEMANTIC_PAIRS = [
+    # (make A, make B, paritea's answer)
+    (
+        (
+            "diagram_generate",
+            {"generator": "Rotated surface code memory experiment", "params": {"distance": 3, "rounds": 1}},
+        ),
+        (
+            "diagram_generate",
+            {"generator": "Rotated surface code memory experiment", "params": {"distance": 3, "rounds": 2}},
+        ),
+        True,
+    ),
+    (("diagram_example", {"example": "two-half-pi"}), ("diagram_example", {"example": "one-pi"}), True),
+    (("diagram_example", {"example": "two-half-pi"}), ("diagram_example", {"example": "one-half-pi"}), False),
+    (("diagram_example", {"example": "steane-state"}), ("diagram_example", {"example": "steane-circuit"}), True),
+    (("diagram_example", {"example": "star-6"}), ("diagram_example", {"example": "ring-6"}), True),
+    (("diagram_example", {"example": "steane-state"}), ("diagram_example", {"example": "one-pi"}), False),
+]
+
+
+@pytest.mark.parametrize(("make_a", "make_b", "expected"), SEMANTIC_PAIRS)
+def test_semantic_equivalence_agrees_with_paritea(make_a, make_b, expected) -> None:
+    from paritea.equivalence import is_semantic_equivalence
+
+    a, b = call(make_a[0], **make_a[1]), call(make_b[0], **make_b[1])
+
+    result = call("semantic_equivalence", a=a["id"], b=b["id"])
+
+    assert result["equivalent"] is expected
+    da, db = api.SHELF.get(a["id"]).diagram, api.SHELF.get(b["id"]).diagram
+    assert is_semantic_equivalence(da, db) is expected
+    assert all(len(row) == result["a"]["inputs"] + result["a"]["outputs"] for row in result["a"]["rows"])
+
+
+def test_semantic_python_reproduces_the_answer() -> None:
+    a = call("diagram_example", example="two-half-pi")
+    b = call("diagram_example", example="one-half-pi")
+    result = call("semantic_equivalence", a=a["id"], b=b["id"])
+    namespace: dict = {}
+
+    exec(result["code"].replace("print(", "answer = ("), namespace)  # noqa: S102
+
+    assert namespace["answer"] is result["equivalent"] is False

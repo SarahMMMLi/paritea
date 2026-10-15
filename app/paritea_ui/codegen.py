@@ -145,6 +145,20 @@ def webs_code(diagram_code: str) -> str:
     )
 
 
+def _as_function(code: str, name: str) -> str:
+    """Wrap diagram-building code in a function returning ``diagram``, so two diagrams can share one script."""
+    body = "".join(f"    {line}\n" if line.strip() else "\n" for line in code.rstrip("\n").split("\n"))
+    return f"def {name}():\n{body}    return diagram\n"
+
+
+def semantic_code(code_a: str, code_b: str) -> str:
+    return (
+        "from paritea.equivalence import is_semantic_equivalence\n\n\n"
+        f"{_as_function(code_a, 'diagram_a')}\n\n{_as_function(code_b, 'diagram_b')}\n\n"
+        "print(is_semantic_equivalence(diagram_a(), diagram_b()))\n"
+    )
+
+
 def propagation_code(noise_code: str) -> str:
     code = _with_import(noise_code, "from paritea import build_flip_operators, push_out")
     return code + (

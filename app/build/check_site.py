@@ -194,6 +194,23 @@ def check_propagation(page) -> list[str]:
     return [] if ok else [f"propagation {got} != {expected}"]
 
 
+def check_semantic(page) -> list[str]:
+    """Pairs from paritea's tests: the surface code with 1 and 2 rounds, and two pi/2 spiders vs one."""
+    failures = []
+    for index, label, expected in [(0, "surface code 1 vs 2 rounds", True), (2, "two pi/2 vs one pi/2", False)]:
+        page.goto(URL + "#/semantic")
+        page.evaluate("window.lastSemantic = null")
+        page.click(f"[data-pair='{index}']")
+        page.wait_for_function("window.lastSemantic !== null", timeout=120_000)
+        got = page.evaluate("window.lastSemantic.equivalent")
+        page.screenshot(path=SHOTS / f"10-semantic-{index}.png", full_page=True)
+        ok = got is expected
+        print(f"{'OK  ' if ok else 'FAIL'} Semantic: {label} -> {got} (expected {expected})")
+        if not ok:
+            failures.append(f"semantic {label}: {got}")
+    return failures
+
+
 def main() -> int:
     failures = []
     with sync_playwright() as p:
@@ -232,6 +249,7 @@ def main() -> int:
         failures += check_diagrams(page)
         failures += check_noise(page)
         failures += check_propagation(page)
+        failures += check_semantic(page)
 
         # Show a detecting region on the first example for a screenshot.
         page.goto(URL + "#/webs")
