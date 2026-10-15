@@ -436,3 +436,41 @@ def test_stim_dem_of_pasted_text_and_its_python(tmp_path, monkeypatch) -> None:
 )
 def test_stim_dem_explains_bad_circuits(text: str, message: str) -> None:
     assert message in error("stim_dem", text=text)["message"]
+
+
+def test_console_runs_paritea_code_like_a_notebook_cell() -> None:
+    call("console_reset")
+
+    first = call(
+        "console_run", code="d = generate.surface_code_memory_experiment(distance=3, rounds=2)\nprint('built')"
+    )
+    second = call("console_run", code="stabs, regions = compute_pauli_webs(d)\nlen(stabs), len(regions)")
+
+    assert first["stdout"] == "built\n"
+    assert first["result"] is None
+    assert second["result"] == "(18, 8)"  # the variable `d` survived between runs
+    assert second["error"] is None
+
+
+def test_console_reports_errors_and_panics_without_failing() -> None:
+    syntax = call("console_run", code="def broken(:")
+    runtime = call("console_run", code="1 / 0")
+    panic = call("console_run", code="compute_pauli_webs(Diagram())")  # virtual IO makes paritea's Rust panic
+
+    assert "SyntaxError" in syntax["error"]
+    assert "ZeroDivisionError" in runtime["error"]
+    assert "Rust core panicked" in panic["error"]
+
+
+def test_console_works_on_copies_of_shelf_objects_and_can_add_diagrams() -> None:
+    entry = call("diagram_example", example="steane-state")
+    call("console_reset")
+
+    result = call(
+        "console_run", code=f'd = diagram("{entry["id"]}")\nd.add_node(NodeType.Z)\nput(d, "Steane plus a spider")'
+    )
+
+    new_id = result["result"].strip("'")
+    assert api.SHELF.get(entry["id"]).diagram.num_nodes() == entry["summary"]["Nodes"]  # the shelf copy is untouched
+    assert api.SHELF.get(new_id).diagram.num_nodes() == entry["summary"]["Nodes"] + 1
+    assert any(e["id"] == new_id for e in result["shelf"])

@@ -15,6 +15,7 @@ ENGINE_MODULES = [
     "__init__.py",
     "api.py",
     "codegen.py",
+    "console.py",
     "core.py",
     "examples.py",
     "layout.py",

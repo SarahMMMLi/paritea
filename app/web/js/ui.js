@@ -28,15 +28,28 @@ export function noticeHtml(text) {
   return `<div class="alert alert-preview">${escapeHtml(text)}</div>`;
 }
 
+// Code handed from a tool's Python code panel to the console page.
+export const pending = { code: null };
+
 export function codeCardHtml(code, title = "Python code that reproduces this") {
+  // Code that reads a file you downloaded cannot run in the page's console, which has no such file.
+  const runnable = !code.includes("open(") && !code.includes("from_file(") && !code.includes("__main__");
   return `<section class="card code-card">
       <div class="card-head"><h3>${escapeHtml(title)}</h3>
-        <button type="button" class="btn btn-ghost btn-small" data-copy>Copy</button></div>
+        <span class="row-actions">
+          ${runnable ? `<button type="button" class="btn btn-ghost btn-small" data-open-console>Open in console</button>` : ""}
+          <button type="button" class="btn btn-ghost btn-small" data-copy>Copy</button></span></div>
       <pre class="code"><code>${escapeHtml(code)}</code></pre>
     </section>`;
 }
 
 export function wireCopyButtons(root, code) {
+  root.querySelectorAll("[data-open-console]").forEach((button) =>
+    button.addEventListener("click", () => {
+      pending.code = code;
+      location.hash = "#/console";
+    }),
+  );
   root.querySelectorAll("[data-copy]").forEach((button) =>
     button.addEventListener("click", async () => {
       await navigator.clipboard.writeText(code);

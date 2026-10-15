@@ -33,9 +33,10 @@ export const TOOLS = [
     summary: "Turn a stim circuit into paritea's detector error model.",
     provide: "A stim circuit: the surface-code preset or your own",
     get: "A .dem file checked against stim's own, the ZX diagram and Python code" },
-  { id: "console", group: "Advanced", title: "Python console",
+  { id: "console", group: "Advanced", title: "Python console", live: true,
     summary: "Use the whole paritea API from Python, right in the page.",
-    provide: "Python code", get: "Its output, with paritea already imported" },
+    provide: "Python code (paritea, pyzx, numpy and stim are imported)",
+    get: "Its output and last value; your shelf is available too" },
 ];
 
 export function renderHome(ctx) {

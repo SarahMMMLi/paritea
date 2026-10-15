@@ -737,6 +737,27 @@ def stim_dem(preset: dict | None = None, text: str | None = None, filename: str 
     }
 
 
+# ---------------------------------------------------------------- Python console
+
+
+def console_run(code: str) -> dict[str, Any]:
+    """Run Python in the engine, with paritea imported; see paritea_ui.console."""
+    from paritea_ui import console
+
+    result = console.run(code)
+    result["shelf"] = [
+        {"id": e.id, "name": e.name, "summary": summary(e.diagram), "source": e.source} for e in SHELF.entries.values()
+    ]
+    return result
+
+
+def console_reset() -> dict[str, bool]:
+    from paritea_ui import console
+
+    console.reset()
+    return {"reset": True}
+
+
 # ---------------------------------------------------------------- Pauli webs
 
 
@@ -770,6 +791,8 @@ OPS: dict[str, Callable[..., Any]] = {
     "generators": generators,
     "examples": examples,
     "diagram_generate": diagram_generate,
+    "console_reset": console_reset,
+    "console_run": console_run,
     "diagram_example": diagram_example,
     "diagram_import": diagram_import,
     "diagram_get": diagram_get,

@@ -65,7 +65,7 @@ python3 -m http.server 8000 --directory web    # http://localhost:8000
 | `web/js/worker.js` | The engine: loads Pyodide, installs `web/wheels` with `deps=False`, calls `paritea_ui.api.dispatch` |
 | `web/js/engine.js` | Worker client; falls back to `web/data` (preview mode) if the engine cannot start, or with `?engine=precomputed` |
 | `web/js/main.js` | Boot, engine status pill and hash routing (`#/`, `#/diagrams`, `#/webs?diagram=D3&run=1`) |
-| `web/js/tools/*.js` | One module per page: `home.js` (tool catalogue), `dem.js`, `diagrams.js`, `fault.js`, `noise.js`, `propagation.js`, `semantic.js`, `webs.js` |
+| `web/js/tools/*.js` | One module per page: `home.js` (tool catalogue), `console.js`, `dem.js`, `diagrams.js`, `fault.js`, `noise.js`, `propagation.js`, `semantic.js`, `webs.js` |
 | `web/js/ui.js`, `web/js/shelf.js`, `web/js/diagram-view.js` | Shared result blocks and viewer, the page's copy of the shelf, SVG drawing |
 | `paritea_ui/api.py` | JSON-in/JSON-out operations the page calls; register new ones in `OPS` |
 | `paritea_ui/session.py` | The shelf: every diagram (`D1`, ...) and noise model (`N1`, ...) made in the session; tools work on these objects |

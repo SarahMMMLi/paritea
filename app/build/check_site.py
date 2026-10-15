@@ -296,6 +296,47 @@ def check_dem(page) -> list[str]:
     return failures
 
 
+def check_console(page) -> list[str]:
+    """An example cell, a Rust panic reported as an error, and code handed over from a tool's code panel."""
+    failures = []
+    page.goto(URL + "#/console")
+    page.select_option("#console-example", "0")
+    page.evaluate("window.lastConsole = null")
+    page.click("#console-run")
+    page.wait_for_function("window.lastConsole !== null", timeout=120_000)
+    first = page.evaluate("window.lastConsole")
+    page.fill("#console-code", "compute_pauli_webs(Diagram())  # virtual IO: paritea's Rust core panics")
+    page.evaluate("window.lastConsole = null")
+    page.click("#console-run")
+    page.wait_for_function("window.lastConsole !== null", timeout=60_000)
+    panic = page.evaluate("window.lastConsole")
+    page.screenshot(path=SHOTS / "13-console.png", full_page=True)
+    checks = [
+        ("example cell", first["result"] == "(18, 8)", first["result"]),
+        ("Rust panic reported", "Rust core panicked" in (panic["error"] or ""), (panic["error"] or "")[:60]),
+    ]
+    page.goto(URL + "#/webs")
+    page.click("[data-source='generate']")
+    page.select_option("#generator", "Z-web grid")
+    page.fill("#p-qubits", "2")
+    page.fill("#p-depth", "2")
+    page.evaluate("window.lastResult = null")
+    page.click("#run")
+    page.wait_for_function("window.lastResult !== null", timeout=60_000)
+    page.click("[data-open-console]")
+    page.wait_for_selector("#console-code")
+    page.evaluate("window.lastConsole = null")
+    page.click("#console-run")
+    page.wait_for_function("window.lastConsole !== null", timeout=60_000)
+    handed = page.evaluate("window.lastConsole")
+    checks.append(("code panel opened in console", handed["stdout"].strip() == "4 1", handed["stdout"].strip()))
+    for label, ok, got in checks:
+        print(f"{'OK  ' if ok else 'FAIL'} Console: {label} -> {got}")
+        if not ok:
+            failures.append(f"console {label}: {got}")
+    return failures
+
+
 def main() -> int:
     failures = []
     with sync_playwright() as p:
@@ -336,6 +377,7 @@ def main() -> int:
         failures += check_propagation(page)
         failures += check_semantic(page)
         failures += check_dem(page)
+        failures += check_console(page)
         failures += check_fault(page)
 
         # Show a detecting region on the first example for a screenshot.

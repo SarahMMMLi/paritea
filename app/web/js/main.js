@@ -1,6 +1,7 @@
 // Boot: starts the engine, shows its status in the header, and routes between the tool pages.
 
 import { Engine } from "./engine.js";
+import { renderConsole } from "./tools/console.js";
 import { shelf } from "./shelf.js";
 import { renderDem } from "./tools/dem.js";
 import { renderDiagrams } from "./tools/diagrams.js";
@@ -60,6 +61,7 @@ const ctx = {
 
 const ROUTES = {
   "": [renderHome, "paritea in your browser"],
+  console: [renderConsole, "Python console · paritea"],
   dem: [renderDem, "stim → detector error model · paritea"],
   diagrams: [renderDiagrams, "Diagrams · paritea"],
   fault: [renderFault, "Fault equivalence · paritea"],

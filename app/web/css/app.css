@@ -382,3 +382,19 @@ svg.diagram.pickable .edge:has(+ .hit:hover) { stroke: var(--accent); stroke-wid
 .verdict-title { font-size: 17px; }
 pre.dem-text { max-height: 360px; font-size: 12px; }
 .results > .verdict { margin-bottom: 12px; }
+
+/* Python console */
+.console-panel textarea { min-height: 220px; font-size: 13.5px; tab-size: 4; }
+.console-bar { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 10px; }
+.param.inline { flex-direction: row; align-items: center; gap: 8px; font-size: 13px; font-weight: 600; color: var(--text-2); }
+.param.inline select { min-height: 34px; padding: 4px 8px; width: auto; }
+.console-output { display: flex; flex-direction: column; gap: 12px; }
+.cell { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-sm); overflow: hidden; }
+.cell pre { margin: 0; padding: 10px 14px; font-size: 13px; line-height: 1.55; overflow: auto; white-space: pre-wrap; }
+.cell-code { background: var(--surface-2); color: var(--text-2); max-height: 180px; }
+.cell-out { color: var(--text); }
+.cell-result { color: var(--accent-text); font-weight: 600; }
+.cell-error { color: var(--err); background: var(--err-weak); }
+.cell-time { margin: 0; padding: 4px 14px 8px; font-size: 12px; color: var(--text-3); }
+.card-head .row-actions { gap: 6px; }
+#console-cancel[hidden] { display: none; }
