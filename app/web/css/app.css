@@ -213,7 +213,7 @@ kbd { font-family: var(--mono); font-size: 12px; border: 1px solid var(--border-
 .viewer-bar { display: flex; align-items: center; gap: 12px; padding: 10px 12px; border-bottom: 1px solid var(--border); flex-wrap: wrap; }
 .segmented { display: inline-flex; background: var(--surface-2); border-radius: 10px; padding: 3px; gap: 2px; }
 .segmented button { font: inherit; font-size: 13px; font-weight: 600; color: var(--text-2); background: transparent; border: 0; border-radius: 8px; padding: 6px 12px; cursor: pointer; }
-.segmented button[aria-selected="true"] { background: var(--surface); color: var(--text); box-shadow: 0 1px 2px rgb(15 23 42 / 0.12); }
+.segmented button[aria-selected="true"], .segmented button[aria-pressed="true"] { background: var(--surface); color: var(--text); box-shadow: 0 1px 2px rgb(15 23 42 / 0.12); }
 .segmented .count { color: var(--text-3); font-weight: 500; margin-left: 4px; font-variant-numeric: tabular-nums; }
 .stepper { display: inline-flex; align-items: center; gap: 6px; }
 .stepper span { font-size: 13px; color: var(--text-2); min-width: 112px; text-align: center; font-variant-numeric: tabular-nums; }
@@ -322,3 +322,17 @@ textarea:focus { outline: 2px solid color-mix(in srgb, var(--accent) 40%, transp
 .source-body { margin-top: 12px; }
 .source-body select { width: min(100%, 520px); }
 .hero-actions .btn-ghost { background: var(--surface); }
+
+/* Noise models */
+svg.diagram .edge.noise-free { stroke-dasharray: 5 4; opacity: 0.45; }
+svg.diagram.pickable .hit { cursor: pointer; }
+svg.diagram.pickable .edge:has(+ .hit:hover) { stroke: var(--accent); stroke-width: 3; opacity: 1; }
+.swatch.noisy { background: var(--edge); height: 3px; }
+.swatch.noise-free { background: repeating-linear-gradient(90deg, var(--edge) 0 5px, transparent 5px 9px); height: 3px; opacity: 0.6; }
+.preset-row { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-top: 4px; }
+.picked-count { font-size: 13px; color: var(--text-2); font-variant-numeric: tabular-nums; }
+.weights { display: flex; gap: 16px; flex-wrap: wrap; }
+.weights input[type="number"] { width: 96px; }
+.step + .step { margin-top: 22px; padding-top: 18px; border-top: 1px solid var(--border); }
+.canvas-small svg.diagram { height: 380px; }
+.truncated { font-size: 12px; color: var(--text-3); padding: 8px 14px; }

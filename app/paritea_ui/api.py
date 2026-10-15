@@ -17,16 +17,18 @@ import pyzx as zx
 from paritea import PauliString
 from paritea.diagram import Diagram
 from paritea.glue.pyzx import from_pyzx, to_pyzx
+from paritea.noise import NoiseModel
 from paritea.web import compute_pauli_webs
 
 from paritea_ui import codegen
 from paritea_ui.core import GENERATORS, build_diagram, is_rust_panic
 from paritea_ui.examples import EXAMPLES
 from paritea_ui.layout import UNSET, node_positions, place_unpositioned
-from paritea_ui.session import SHELF, Entry
+from paritea_ui.session import SHELF, Entry, NoiseEntry
 from paritea_ui.validate import UserError, diagram_problems, require_valid
 
 MAX_IMPORT_CHARS = 5_000_000
+MAX_WEIGHT = 100
 
 
 def info() -> dict[str, str]:
@@ -286,9 +288,9 @@ def diagram_get(diagram: str) -> dict[str, Any]:
     return entry_json(SHELF.get(diagram))
 
 
-def diagram_remove(diagram: str) -> dict[str, str]:
-    SHELF.remove(diagram)
-    return {"removed": diagram}
+def diagram_remove(diagram: str) -> dict[str, Any]:
+    """Remove a diagram from the shelf, together with its noise models."""
+    return {"removed": diagram, "noise": SHELF.remove(diagram)}
 
 
 def diagram_export(diagram: str, fmt: str) -> dict[str, str]:
@@ -299,10 +301,91 @@ def diagram_export(diagram: str, fmt: str) -> dict[str, str]:
     inputs, outputs = d.io()
     g.set_inputs(tuple(mapping[n] for n in inputs))
     g.set_outputs(tuple(mapping[n] for n in outputs))
-    stem = "".join(c if c.isalnum() else "-" for c in entry.name.lower()).strip("-")[:60] or entry.id.lower()
+    stem = codegen.file_stem(entry.name, entry.id.lower())
     if fmt == "tikz":
         return {"filename": f"{stem}.tikz", "text": g.to_tikz()}
     return {"filename": f"{stem}.json", "text": g.to_json()}
+
+
+# ---------------------------------------------------------------- Noise models
+
+
+def noise_json(noise: NoiseEntry) -> dict[str, Any]:
+    """A noise model for the page: its faults, settings and notes, plus the drawing of its diagram."""
+    entry = SHELF.get(noise.diagram_id)
+    weights = noise.settings["weights"]
+    faults = [
+        [[(edge, str(pauli)) for edge, pauli in sorted(fault.edge_flips.items())], value]
+        for fault, value in noise.model.atomic_faults_with_values_unpacked()
+    ]
+    faults.sort(key=lambda row: [(e, "IXYZ".index(p)) for e, p in row[0]])
+    noisy_edges = {e for edges, _ in faults for e, _ in edges}
+    notes = []
+    if len(set(weights.values())) > 1:
+        notes.append(
+            "The X, Y and Z weights differ. paritea's fault-equivalence check assumes equal weights, so with these it "
+            "may give a wrong answer."
+        )
+    if not faults:
+        notes.append("Every edge is noise-free, so this noise model has no faults.")
+    return {
+        "id": noise.id,
+        "name": noise.name,
+        "diagram": {"id": entry.id, "name": entry.name},
+        "settings": noise.settings,
+        "summary": {
+            "Faults": noise.model.num_faults(),
+            "Noisy edges": len(noisy_edges),
+            "Noise-free edges": len(noise.settings["noise_free"]),
+            "Weights X, Y, Z": f"{weights['x']}, {weights['y']}, {weights['z']}",
+        },
+        "faults": faults,
+        "notes": notes,
+        "code": noise.code,
+        "drawing": diagram_json(entry.diagram),
+    }
+
+
+def noise_model(diagram: str, weights: dict[str, int], noise_free: list[int]) -> dict[str, Any]:
+    """Independent X, Y and Z flips with the given weights on every edge except the noise-free ones."""
+    entry = SHELF.get(diagram)
+    d = entry.diagram
+    for key in "xyz":
+        w = weights.get(key)
+        if not isinstance(w, int) or not 1 <= w <= MAX_WEIGHT:
+            raise UserError(f"The {key.upper()} weight must be a whole number from 1 to {MAX_WEIGHT}.")
+    edges = set(d.edge_indices())
+    unknown = sorted(set(noise_free) - edges)
+    if unknown:
+        raise UserError(f"Diagram {diagram} has no edge {unknown[0]}.")
+    chosen = sorted(set(noise_free))
+    weights = {k: weights[k] for k in "xyz"}
+    model = NoiseModel.weighted_edge_flip_noise(
+        d, w_x=weights["x"], w_y=weights["y"], w_z=weights["z"], idealised_edges=chosen
+    )
+    code = codegen.noise_code(
+        codegen.exact_diagram_code(entry),
+        weights=weights,
+        noise_free=[tuple(d.get_edge_endpoints_by_index(e)) for e in chosen],
+    )
+    free = f", {len(chosen)} noise-free" if chosen else ""
+    noise = SHELF.add_noise(
+        model,
+        name=f"Edge-flip noise on {entry.id} (X {weights['x']}, Y {weights['y']}, Z {weights['z']}{free})",
+        diagram_id=entry.id,
+        settings={"weights": weights, "noise_free": chosen},
+        code=code,
+    )
+    return noise_json(noise)
+
+
+def noise_get(noise: str) -> dict[str, Any]:
+    return noise_json(SHELF.get_noise(noise))
+
+
+def noise_remove(noise: str) -> dict[str, str]:
+    SHELF.remove_noise(noise)
+    return {"removed": noise}
 
 
 # ---------------------------------------------------------------- Pauli webs
@@ -343,6 +426,9 @@ OPS: dict[str, Callable[..., Any]] = {
     "diagram_get": diagram_get,
     "diagram_remove": diagram_remove,
     "diagram_export": diagram_export,
+    "noise_model": noise_model,
+    "noise_get": noise_get,
+    "noise_remove": noise_remove,
     "webs": webs,
     "pauli_webs": pauli_webs,
 }

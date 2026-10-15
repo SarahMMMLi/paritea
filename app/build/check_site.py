@@ -124,11 +124,66 @@ def check_diagrams(page) -> list[str]:
     return failures
 
 
+def settle(page) -> None:
+    """Wait until the page has stopped scrolling (results scroll smoothly into view)."""
+    page.evaluate(
+        """() => new Promise((resolve) => {
+          let last = -1, still = 0;
+          const tick = () => {
+            still = window.scrollY === last ? still + 1 : 0;
+            last = window.scrollY;
+            if (still > 5) resolve(); else requestAnimationFrame(tick);
+          };
+          tick();
+        })"""
+    )
+
+
+def build_noise(page) -> dict:
+    page.evaluate("window.lastNoise = null")
+    page.click("#run")
+    page.wait_for_function("window.lastNoise !== null", timeout=60_000)
+    return page.evaluate("window.lastNoise")
+
+
+def check_noise(page) -> list[str]:
+    """The Steane demo's noise model, an edge picked on the drawing, and a preset."""
+    failures = []
+    page.goto(URL + "#/noise")
+    page.click("#use-steane")
+    count = "(document.getElementById('picked-count')?.textContent ?? '')"
+    page.wait_for_function(f"{count}.startsWith('13 noise-free')", timeout=60_000)
+    steps = [("demo: X-spider wires noise-free", None, 21)]
+    noise = build_noise(page)
+    got = [(steps[0][0], noise["summary"]["Faults"])]
+    settle(page)
+    page.locator("#pick-canvas .hit").first.click()  # switch one wire
+    page.wait_for_function(f"!{count}.startsWith('13 noise-free')", timeout=10_000)
+    picked = page.evaluate(count)
+    toggled = build_noise(page)["summary"]["Faults"]
+    steps.append(("one wire clicked", picked, 24 if picked.startswith("12") else 18))
+    got.append((steps[1][0], toggled))
+    page.click("[data-preset='none']")
+    steps.append(("preset: none", None, 60))
+    got.append((steps[2][0], build_noise(page)["summary"]["Faults"]))
+    page.screenshot(path=SHOTS / "8-noise.png", full_page=True)
+    for (label, _, expected), (_, faults) in zip(steps, got, strict=True):
+        ok = faults == expected
+        print(f"{'OK  ' if ok else 'FAIL'} Noise: {label} -> {faults} faults (expected {expected})")
+        if not ok:
+            failures.append(f"noise {label}: {faults} != {expected}")
+    listed = page.locator("#noise-shelf .shelf-list li").count()
+    print(f"{'OK  ' if listed == 3 else 'FAIL'} Noise: shelf lists {listed} noise models")
+    if listed != 3:
+        failures.append(f"noise shelf lists {listed}")
+    return failures
+
+
 def main() -> int:
     failures = []
     with sync_playwright() as p:
         browser = p.chromium.launch()
-        page = browser.new_page(viewport={"width": 1280, "height": 860})
+        page = browser.new_page(viewport={"width": 1280, "height": 860}, reduced_motion="reduce")
         logs: list[str] = []
         page.on("console", lambda m: logs.append(f"{m.type}: {m.text}"))
         page.on("pageerror", lambda e: logs.append(f"pageerror: {e}"))
@@ -160,6 +215,7 @@ def main() -> int:
             page.screenshot(path=SHOTS / f"3-webs-{i}.png", full_page=True)
 
         failures += check_diagrams(page)
+        failures += check_noise(page)
 
         # Show a detecting region on the first example for a screenshot.
         page.goto(URL + "#/webs")
@@ -170,7 +226,7 @@ def main() -> int:
         page.screenshot(path=SHOTS / "4-region.png", full_page=True)
 
         # Preview mode works without the engine.
-        preview = browser.new_page(viewport={"width": 1280, "height": 860})
+        preview = browser.new_page(viewport={"width": 1280, "height": 860}, reduced_motion="reduce")
         preview.goto(URL + "?engine=precomputed#/webs")
         preview.wait_for_function(READY, timeout=60_000)
         preview.wait_for_selector("#generator option", state="attached")

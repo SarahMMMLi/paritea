@@ -130,6 +130,12 @@ export function readParams(generator) {
   return params;
 }
 
+/** Scrolls a result into view: smoothly, unless the visitor prefers reduced motion. */
+export function scrollToResult(element) {
+  const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  element?.scrollIntoView({ behavior: reduce ? "auto" : "smooth", block: "nearest" });
+}
+
 /** Puts a button into its busy state while `task` runs. */
 export async function withBusyButton(button, busyLabel, task) {
   const label = button.innerHTML;

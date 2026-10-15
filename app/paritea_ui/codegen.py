@@ -1,6 +1,7 @@
 """Python that reproduces what the page did, using paritea's public API only."""
 
 import inspect
+from typing import Any
 
 from paritea_ui.examples import EXAMPLES
 
@@ -81,9 +82,82 @@ def import_code(
     return "\n".join(lines) + "\n"
 
 
+# Generators whose edge numbers differ between runs or computers: shor_extraction renumbers on every call, and the
+# surface code iterates sets of tuples, whose order differs between 32-bit browsers and 64-bit Python.
+UNSTABLE_NUMBERING = {
+    "Rotated surface code memory experiment",
+    "Steane code, Shor syndrome extraction",
+    "Rotated surface code, Shor syndrome extraction",
+}
+
+
+def file_stem(name: str, fallback: str) -> str:
+    """A file name (without extension) for downloads of a shelf object."""
+    return "".join(c if c.isalnum() else "-" for c in name.lower()).strip("-")[:60] or fallback
+
+
+def _with_import(code: str, statement: str) -> str:
+    """Add an import statement after the import block at the top of ``code``."""
+    lines = code.rstrip("\n").split("\n")
+    last = -1
+    for i, line in enumerate(lines):
+        if line.startswith(("import ", "from ")):
+            last = i
+        elif line.strip():
+            break
+    lines.insert(last + 1, statement)
+    return "\n".join(lines) + "\n"
+
+
+def exact_diagram_code(entry: Any) -> str:
+    """Python that rebuilds exactly this shelf diagram, with the same node and edge numbers.
+
+    Needed whenever the code goes on to name particular edges.
+    """
+    source = entry.source
+    if source["kind"] != "generator" or source["generator"] not in UNSTABLE_NUMBERING:
+        return entry.code
+    filename = file_stem(entry.name, entry.id.lower()) + ".json"
+    inputs, outputs = entry.diagram.io()
+    return (
+        "import pyzx as zx\nfrom paritea.glue.pyzx import from_pyzx\n\n"
+        "# Building this diagram again would number its edges differently, so load the exact copy:\n"
+        f"# download {filename} (PyZX JSON) from the Diagrams page first.\n"
+        f"with open({filename!r}) as f:\n"
+        "    diagram = from_pyzx(zx.Graph.from_json(f.read()), positions=True)\n"
+        f"diagram.set_io(inputs={list(inputs)}, outputs={list(outputs)}, virtual=False)\n"
+    )
+
+
+def _pairs(pairs: list[tuple[int, int]], indent: str = "    ") -> str:
+    """A list of (s, t) pairs as Python, eight per line."""
+    rows = [", ".join(f"({s}, {t})" for s, t in pairs[i : i + 8]) for i in range(0, len(pairs), 8)]
+    if len(rows) <= 1:
+        return f"[{rows[0] if rows else ''}]"
+    return "[\n" + "".join(f"{indent}{row},\n" for row in rows) + "]"
+
+
 def webs_code(diagram_code: str) -> str:
     return (
-        diagram_code.replace("\n\n", "\nfrom paritea.web import compute_pauli_webs\n\n", 1)
+        _with_import(diagram_code, "from paritea.web import compute_pauli_webs")
         + "stabilising_webs, detecting_regions = compute_pauli_webs(diagram)\n"
         + "print(len(stabilising_webs), len(detecting_regions))\n"
+    )
+
+
+def noise_code(diagram_code: str, *, weights: dict[str, int], noise_free: list[tuple[int, int]]) -> str:
+    code = _with_import(diagram_code, "from paritea.noise import NoiseModel")
+    if noise_free:
+        code += (
+            "\n# Noise-free edges, named by the nodes they join\n"
+            f"noise_free_wires = {_pairs(noise_free)}\n"
+            "noise_free = [diagram.edge_indices_from_endpoints(s, t)[0] for s, t in noise_free_wires]\n"
+        )
+    else:
+        code += "\nnoise_free = []\n"
+    return code + (
+        "noise_model = NoiseModel.weighted_edge_flip_noise(\n"
+        f"    diagram, w_x={weights['x']}, w_y={weights['y']}, w_z={weights['z']}, idealised_edges=noise_free\n"
+        ")\n"
+        "print(noise_model.num_faults(), 'faults')\n"
     )

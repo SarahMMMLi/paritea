@@ -10,6 +10,7 @@ import {
   noticeHtml,
   paramsHtml,
   plural,
+  scrollToResult,
   readParams,
   statsHtml,
   viewerHtml,
@@ -257,7 +258,8 @@ function showEntry(ctx, entry) {
     ${viewerHtml()}
     <p class="io-line"><strong>Inputs:</strong> ${ranges(entry.diagram.inputs)} · <strong>Outputs:</strong> ${ranges(entry.diagram.outputs)}</p>
     <div class="next-steps">
-      ${entry.problems.length ? "" : `<a class="btn btn-primary" href="#/webs?diagram=${entry.id}&run=1">Compute Pauli webs →</a>`}
+      ${entry.problems.length ? "" : `<a class="btn btn-primary" href="#/webs?diagram=${entry.id}&run=1">Compute Pauli webs →</a>
+        <a class="btn btn-ghost" href="#/noise?diagram=${entry.id}">Add a noise model</a>`}
       <span class="download-label">Download</span>
       <button type="button" class="btn btn-ghost btn-small" data-export="pyzx">PyZX JSON</button>
       <button type="button" class="btn btn-ghost btn-small" data-export="tikz">TikZ</button>
@@ -279,7 +281,7 @@ function showEntry(ctx, entry) {
       }
     }),
   );
-  results.querySelector(".headline").scrollIntoView({ behavior: "smooth", block: "nearest" });
+  scrollToResult(results.querySelector(".headline"));
 }
 
 // ---------------------------------------------------------------- Shelf
@@ -308,7 +310,8 @@ function renderShelf(ctx) {
     b.addEventListener("click", async () => {
       const id = b.dataset.remove;
       try {
-        await ctx.engine.run("diagram_remove", { diagram: id });
+        const removed = await ctx.engine.run("diagram_remove", { diagram: id });
+        removed.noise.forEach((noiseId) => shelf.removeNoise(noiseId));
       } finally {
         shelf.remove(id);
         if (remembered.shown === id) {

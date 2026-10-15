@@ -143,3 +143,89 @@ def test_example_python_reproduces_the_diagram(example: str) -> None:
 
     d = namespace["diagram"]
     assert (d.num_nodes(), d.num_edges()) == (entry["summary"]["Nodes"], entry["summary"]["Edges"])
+
+
+def _wires_touching(entry: dict, kind: str) -> list[int]:
+    types = {n["id"]: n["type"] for n in entry["diagram"]["nodes"]}
+    return [e for e, s, t in entry["diagram"]["edges"] if kind in (types[s], types[t])]
+
+
+def test_noise_model_of_the_steane_demo() -> None:
+    """The demo's state noise model: X, Y, Z flips on every edge except the wires of the four X spiders."""
+    state = call("diagram_example", example="steane-state")
+
+    noise = call(
+        "noise_model", diagram=state["id"], weights={"x": 1, "y": 1, "z": 1}, noise_free=_wires_touching(state, "X")
+    )
+
+    assert noise["summary"]["Faults"] == 21  # 7 noisy wires, 3 faults each
+    assert noise["summary"]["Noisy edges"] == 7
+    assert noise["summary"]["Noise-free edges"] == 13
+    assert noise["notes"] == []
+    assert {pauli for edges, _ in noise["faults"] for _, pauli in edges} == {"X", "Y", "Z"}
+
+
+def test_noise_model_without_noise_free_edges() -> None:
+    circuit = call("diagram_example", example="steane-circuit")
+
+    noise = call("noise_model", diagram=circuit["id"], weights={"x": 1, "y": 2, "z": 1}, noise_free=[])
+
+    assert noise["summary"]["Faults"] == 3 * circuit["summary"]["Edges"]
+    assert sorted({w for _, w in noise["faults"]}) == [1, 2]
+    assert "weights differ" in noise["notes"][0]
+
+
+@pytest.mark.parametrize(
+    ("weights", "noise_free", "message"),
+    [
+        ({"x": 0, "y": 1, "z": 1}, [], "The X weight must be a whole number from 1 to 100."),
+        ({"x": 1, "y": 1, "z": 101}, [], "The Z weight must be a whole number from 1 to 100."),
+        ({"x": 1, "y": 1, "z": 1}, [9999], "has no edge 9999"),
+    ],
+)
+def test_bad_noise_settings_are_explained(weights: dict, noise_free: list[int], message: str) -> None:
+    state = call("diagram_example", example="steane-state")
+
+    assert message in error("noise_model", diagram=state["id"], weights=weights, noise_free=noise_free)["message"]
+
+
+def test_removing_a_diagram_removes_its_noise_models() -> None:
+    d = call("diagram_generate", generator="Z-web grid", params={"qubits": 1, "depth": 1})
+    noise = call("noise_model", diagram=d["id"], weights={"x": 1, "y": 1, "z": 1}, noise_free=[])
+
+    removed = call("diagram_remove", diagram=d["id"])
+
+    assert removed["noise"] == [noise["id"]]
+    assert "not on the shelf" in error("noise_get", noise=noise["id"])["message"]
+
+
+@pytest.mark.parametrize(
+    ("make", "args"),
+    [
+        ("diagram_example", {"example": "steane-state"}),
+        ("diagram_generate", {"generator": "Z-web grid", "params": {"qubits": 3, "depth": 2}}),
+        (
+            "diagram_generate",
+            {"generator": "Rotated surface code memory experiment", "params": {"distance": 3, "rounds": 2}},
+        ),
+        ("diagram_generate", {"generator": "Steane code, Shor syndrome extraction", "params": {"rounds": 1}}),
+    ],
+)
+def test_noise_python_reproduces_the_noise_model(make: str, args: dict, tmp_path, monkeypatch) -> None:
+    entry = call(make, **args)
+    free = _wires_touching(entry, "X")[:5]
+    noise = call("noise_model", diagram=entry["id"], weights={"x": 1, "y": 1, "z": 1}, noise_free=free)
+    exported = call("diagram_export", diagram=entry["id"], fmt="pyzx")  # some codes load the exact diagram from it
+    (tmp_path / exported["filename"]).write_text(exported["text"])
+    monkeypatch.chdir(tmp_path)
+    namespace: dict = {}
+
+    exec(noise["code"].replace("print(", "result = ("), namespace)  # noqa: S102
+
+    model = namespace["noise_model"]
+    assert model.num_faults() == noise["summary"]["Faults"]
+    d = namespace["diagram"]
+    endpoints = {e: (s, t) for e, s, t in entry["diagram"]["edges"]}
+    assert sorted(d.get_edge_endpoints_by_index(e) for e in namespace["noise_free"]) == sorted(
+        endpoints[e] for e in free
+    )

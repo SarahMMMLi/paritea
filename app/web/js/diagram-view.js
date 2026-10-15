@@ -11,6 +11,7 @@ const EXPORT_CSS = `
   .has-web .edge { opacity: 0.35; }
   .web-edge { stroke-width: 7; stroke-linecap: round; opacity: 0.85; }
   .web-edge.X { stroke: #d62728; } .web-edge.Y { stroke: #1f77b4; } .web-edge.Z { stroke: #2ca02c; }
+  .edge.noise-free { stroke-dasharray: 5 4; opacity: 0.5; }
   .node { stroke: #1e293b; stroke-width: 1.1; }
   .node.Z { fill: #ccffcc; } .node.X { fill: #ff8888; } .node.H { fill: #ffff66; } .node.B { fill: #0f172a; stroke: none; }
   .phase { font: 11px ui-monospace, Menlo, monospace; fill: #475569; text-anchor: middle; }`;
@@ -39,6 +40,8 @@ export class DiagramView {
     this.nodes = el("g", {}, this.svg);
     this.labels = el("g", {}, this.svg);
     this.box = { x: 0, y: 0, w: 100, h: 100 };
+    this.edgeEls = new Map();
+    this.edgeClick = null;
     this.bindPointer();
   }
 
@@ -47,6 +50,7 @@ export class DiagramView {
     this.points = new Map(diagram.nodes.map((n) => [n.id, n]));
     this.endpoints = new Map(diagram.edges.map(([e, s, t]) => [e, [s, t]]));
     for (const layer of [this.web, this.edges, this.nodes, this.labels]) layer.replaceChildren();
+    this.edgeEls.clear();
 
     const role = new Map();
     diagram.inputs.forEach((n, i) => role.set(n, `input ${i}`));
@@ -55,8 +59,12 @@ export class DiagramView {
     for (const [e, s, t] of diagram.edges) {
       const a = this.points.get(s);
       const b = this.points.get(t);
-      el("line", { class: "edge", x1: a.x * UNIT, y1: a.y * UNIT, x2: b.x * UNIT, y2: b.y * UNIT }, this.edges);
-      el("line", { class: "hit", x1: a.x * UNIT, y1: a.y * UNIT, x2: b.x * UNIT, y2: b.y * UNIT, "data-tip": `Edge ${e} (nodes ${s}–${t})` }, this.edges);
+      const line = el("line", { class: "edge", x1: a.x * UNIT, y1: a.y * UNIT, x2: b.x * UNIT, y2: b.y * UNIT }, this.edges);
+      this.edgeEls.set(e, line);
+      el("line", {
+        class: "hit", x1: a.x * UNIT, y1: a.y * UNIT, x2: b.x * UNIT, y2: b.y * UNIT,
+        "data-tip": `Edge ${e} (nodes ${s}–${t})`, "data-edge": e,
+      }, this.edges);
     }
 
     const showPhases = diagram.nodes.length <= MAX_PHASE_LABELS;
@@ -95,6 +103,18 @@ export class DiagramView {
         "data-tip": `Edge ${e} carries ${pauli}`,
       }, this.web);
     }
+  }
+
+  /** Draws the edges in `ids` (a Set of edge indices) as noise-free: dashed and faint. */
+  setNoiseFree(ids) {
+    for (const [e, line] of this.edgeEls) line.classList.toggle("noise-free", ids.has(e));
+  }
+
+  /** Calls `handler(edge)` when an edge is clicked (pressed and released without dragging). */
+  onEdgeClick(handler, hint = "click to change") {
+    this.edgeClick = handler;
+    this.edgeHint = hint;
+    this.svg.classList.add("pickable");
   }
 
   /** The whole drawing as a standalone SVG file. */
@@ -137,7 +157,7 @@ export class DiagramView {
   bindPointer() {
     let drag = null;
     this.svg.addEventListener("pointerdown", (e) => {
-      drag = { x: e.clientX, y: e.clientY, box: { ...this.box }, scale: 1 / this.svg.getScreenCTM().a };
+      drag = { x: e.clientX, y: e.clientY, box: { ...this.box }, scale: 1 / this.svg.getScreenCTM().a, target: e.target };
       this.svg.setPointerCapture(e.pointerId);
       this.svg.classList.add("dragging");
     });
@@ -147,8 +167,9 @@ export class DiagramView {
         this.apply();
         return;
       }
-      const tip = e.target.getAttribute?.("data-tip");
-      if (!tip) return this.tip.classList.remove("show");
+      const edge = e.target.getAttribute?.("data-edge");
+      const tip = e.target.getAttribute?.("data-tip") + (edge !== null && this.edgeClick ? ` · ${this.edgeHint}` : "");
+      if (!e.target.getAttribute?.("data-tip")) return this.tip.classList.remove("show");
       const rect = this.wrap.getBoundingClientRect();
       this.tip.textContent = tip;
       this.tip.style.left = `${e.clientX - rect.left}px`;
@@ -159,7 +180,12 @@ export class DiagramView {
       drag = null;
       this.svg.classList.remove("dragging");
     };
-    this.svg.addEventListener("pointerup", end);
+    this.svg.addEventListener("pointerup", (e) => {
+      const edge = drag?.target.getAttribute?.("data-edge");
+      const still = drag && Math.hypot(e.clientX - drag.x, e.clientY - drag.y) < 4;
+      end();
+      if (still && edge !== null && edge !== undefined && this.edgeClick) this.edgeClick(Number(edge));
+    });
     this.svg.addEventListener("pointercancel", end);
     this.svg.addEventListener("pointerleave", () => this.tip.classList.remove("show"));
     this.svg.addEventListener("wheel", (e) => {
